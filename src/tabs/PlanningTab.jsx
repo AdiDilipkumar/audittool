@@ -1,13 +1,13 @@
 import { useState, useRef } from 'react';
 import { SignOffBar } from '../components/UI';
 import { SIGN_OFFS } from '../data/mockData';
-import PlanningAuditDetails   from './PlanningAuditDetails';
-import PlanningInherentRisk   from './PlanningInherentRisk';
+import PlanningAuditDetails      from './PlanningAuditDetails';
+import PlanningInherentRisk      from './PlanningInherentRisk';
 import PlanningCombinedAssurance from './PlanningCombinedAssurance';
-import PlanningScope          from './PlanningScope';
-import PlanningToR            from './PlanningToR';
-import PlanningProgramme      from './PlanningProgramme';
-import PlanningRACM           from './PlanningRACM';
+import PlanningScope             from './PlanningScope';
+import PlanningToR               from './PlanningToR';
+import PlanningProgramme         from './PlanningProgramme';
+import PlanningRACM              from './PlanningRACM';
 
 // ── Progress circles strip ─────────────────────────────────────────────────────
 function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 }) {
@@ -39,22 +39,17 @@ function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 
       }}
     >
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--border)" strokeWidth={3} />
+        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--border)" strokeWidth={3} />
         {pct > 0 && (
-          <circle
-            cx={size / 2} cy={size / 2} r={radius}
+          <circle cx={size/2} cy={size/2} r={radius}
             fill="none" stroke={fillColor} strokeWidth={3}
-            strokeDasharray={`${strokeDash} ${circumference}`}
-            strokeLinecap="round"
+            strokeDasharray={`${strokeDash} ${circumference}`} strokeLinecap="round"
           />
         )}
-        <text
-          x={size / 2} y={size / 2}
-          textAnchor="middle" dominantBaseline="central"
-          style={{ transform: `rotate(90deg)`, transformOrigin: `${size / 2}px ${size / 2}px` }}
+        <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
+          style={{ transform: `rotate(90deg)`, transformOrigin: `${size/2}px ${size/2}px` }}
           fontSize={pct === 100 ? 9 : 10} fontWeight={600}
-          fill={pct === 0 ? 'var(--text-muted)' : fillColor}
-        >
+          fill={pct === 0 ? 'var(--text-muted)' : fillColor}>
           {pct === 0 ? '-' : `${pct}%`}
         </text>
       </svg>
@@ -73,14 +68,19 @@ function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 
 }
 
 // ── Planning Tab shell ─────────────────────────────────────────────────────────
-// Props:
-//   openCommentCount  - integer from App
-//   progressData      - { planning, fieldwork, reporting } percentages from App
-//   onTabChange(id)   - called when a progress circle for another tab is clicked
 export default function PlanningTab({
+  // Navigation / progress
   openCommentCount,
   progressData = { planning: 0, fieldwork: 0, reporting: 0 },
   onTabChange,
+  // Engagement data (passed down from App via engagementProps)
+  audit,
+  auditData,
+  onUpdateAuditData,
+  reviewComments = [],
+  setReviewComments,
+  currentUser,
+  openDrawer,
 }) {
   const [activeSection, setActiveSection] = useState('details');
   const signOff = SIGN_OFFS.find(s => s.tab === 'Planning');
@@ -95,15 +95,26 @@ export default function PlanningTab({
   }
 
   const sections = [
-    { id: 'details',   label: 'Audit Details' },
-    { id: 'risk',      label: 'Inherent Risk' },
-    { id: 'assurance', label: 'Combined Assurance' },
-    { id: 'scope',     label: 'Scope Determination' },
-    { id: 'tor',       label: 'Terms of Reference' },
-    { id: 'programme', label: 'Audit Programme' },
-    { id: 'racm',      label: 'RACM' },
-    { id: 'signoff',   label: 'Sign-off' },
+    { id: 'details',   label: 'Audit Details'       },
+    { id: 'risk',      label: 'Inherent Risk'        },
+    { id: 'assurance', label: 'Combined Assurance'   },
+    { id: 'scope',     label: 'Scope Determination'  },
+    { id: 'tor',       label: 'Terms of Reference'   },
+    { id: 'programme', label: 'Audit Programme'      },
+    { id: 'racm',      label: 'RACM'                 },
+    { id: 'signoff',   label: 'Sign-off'             },
   ];
+
+  // Common props forwarded to every sub-component that supports the drawer
+  const subProps = {
+    audit,
+    auditData,
+    onUpdateAuditData,
+    reviewComments,
+    setReviewComments,
+    currentUser,
+    openDrawer,
+  };
 
   return (
     <div ref={topRef} style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -146,14 +157,14 @@ export default function PlanningTab({
         ))}
       </div>
 
-      {/* Section content */}
-      {activeSection === 'details'   && <PlanningAuditDetails />}
-      {activeSection === 'risk'      && <PlanningInherentRisk />}
-      {activeSection === 'assurance' && <PlanningCombinedAssurance />}
-      {activeSection === 'scope'     && <PlanningScope />}
-      {activeSection === 'tor'       && <PlanningToR />}
-      {activeSection === 'programme' && <PlanningProgramme />}
-      {activeSection === 'racm'      && <PlanningRACM />}
+      {/* Section content — subProps forwarded to every section */}
+      {activeSection === 'details'   && <PlanningAuditDetails   {...subProps} />}
+      {activeSection === 'risk'      && <PlanningInherentRisk   {...subProps} />}
+      {activeSection === 'assurance' && <PlanningCombinedAssurance {...subProps} />}
+      {activeSection === 'scope'     && <PlanningScope          {...subProps} />}
+      {activeSection === 'tor'       && <PlanningToR            {...subProps} />}
+      {activeSection === 'programme' && <PlanningProgramme      {...subProps} />}
+      {activeSection === 'racm'      && <PlanningRACM           {...subProps} />}
       {activeSection === 'signoff'   && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{
