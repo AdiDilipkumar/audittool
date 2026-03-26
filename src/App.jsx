@@ -1,37 +1,36 @@
 import { useState } from 'react';
-import { Badge } from './components/UI';
+import { Badge, CommentDrawer } from './components/UI';
 import PlanningTab from './tabs/PlanningTab';
 import FieldworkTab from './tabs/FieldworkTab';
 import ReportingTab from './tabs/ReportingTab';
 import ReviewCommentsTab from './tabs/ReviewCommentsTab';
 import PortfolioTab from './tabs/PortfolioTab';
-import { SAMPLE_AUDIT, ALL_AUDITS, CURRENT_USER, REVIEW_COMMENTS, SIGN_OFFS } from './data/mockData';
+import {
+  CURRENT_USER, ALL_AUDITS, SIGN_OFFS, REVIEW_COMMENTS,
+  AUDIT_DATA_MAP, createAudit,
+} from './data/mockData';
 
-// Engagement-level tabs (shown when inside an audit)
 const ENGAGEMENT_TABS = [
-  { id: 'planning',  label: 'Planning',         icon: '◈' },
-  { id: 'fieldwork', label: 'Fieldwork',         icon: '◉' },
-  { id: 'reporting', label: 'Reporting',         icon: '◎' },
-  { id: 'review',    label: 'Review Comments',   icon: '◇' },
+  { id: 'planning',  label: 'Planning'       },
+  { id: 'fieldwork', label: 'Fieldwork'      },
+  { id: 'reporting', label: 'Reporting'      },
+  { id: 'review',    label: 'Review Comments'},
 ];
 
-function getOpenCommentCount(comments, tab) {
-  return comments.filter(c => c.tab === tab && c.status === 'Open').length;
+function getOpenCommentCount(comments, tab, auditId) {
+  return comments.filter(c =>
+    c.audit_id === auditId && c.tab === tab && c.status === 'Open'
+  ).length;
 }
 
-// ─── Progress calculation ─────────────────────────────────────────────────────
-// Sign-off tiers: 0 = none, 33 = Auditor, 67 = Reviewer, 100 = HIA
-// progressData shape: { [auditId]: { planning: 0|33|67|100, fieldwork: ..., reporting: ... } }
 function computeProgress(signOffs) {
   const result = {};
   signOffs.forEach(so => {
-    if (!result[so.audit_id]) {
-      result[so.audit_id] = { planning: 0, fieldwork: 0, reporting: 0 };
-    }
+    if (!result[so.audit_id]) result[so.audit_id] = { planning: 0, fieldwork: 0, reporting: 0 };
     const tab = so.tab.toLowerCase();
     if (!['planning', 'fieldwork', 'reporting'].includes(tab)) return;
     let pct = 0;
-    if (so.hia_signed_at)      pct = 100;
+    if (so.hia_signed_at)           pct = 100;
     else if (so.reviewer_signed_at) pct = 67;
     else if (so.auditor_signed_at)  pct = 33;
     result[so.audit_id][tab] = pct;
@@ -40,41 +39,93 @@ function computeProgress(signOffs) {
 }
 
 export default function App() {
-  // null = Portfolio home; string = audit id of open engagement
+  // ── Core navigation state ──────────────────────────────────────────────────
   const [selectedAuditId, setSelectedAuditId] = useState(null);
   const [activeEngagementTab, setActiveEngagementTab] = useState('planning');
+
+  // ── Lifted data state ──────────────────────────────────────────────────────
+  const [audits, setAudits]               = useState(ALL_AUDITS);
+  const [signOffs, setSignOffs]           = useState(SIGN_OFFS);
   const [reviewComments, setReviewComments] = useState(REVIEW_COMMENTS);
+  // auditDataMap holds per-audit data (TOR, RACM, queries, issues, etc.)
+  const [auditDataMap, setAuditDataMap]   = useState(AUDIT_DATA_MAP);
 
-  const progressData = computeProgress(SIGN_OFFS);
+  // ── Comment drawer state ───────────────────────────────────────────────────
+  // { open, sectionRef, rowRef, title, contextLabel }
+  const [drawerState, setDrawerState] = useState({
+    open: false, sectionRef: null, rowRef: null, title: '', contextLabel: '',
+  });
 
-  const openPlanningComments  = getOpenCommentCount(reviewComments, 'Planning');
-  const openFieldworkComments = getOpenCommentCount(reviewComments, 'Fieldwork');
-  const openReportingComments = getOpenCommentCount(reviewComments, 'Reporting');
-  const totalOpenComments     = reviewComments.filter(c => c.status === 'Open').length;
-
-  const tabCommentCounts = {
-    planning:  openPlanningComments,
-    fieldwork: openFieldworkComments,
-    reporting: openReportingComments,
+  const openDrawer = ({ sectionRef, rowRef, title, contextLabel }) => {
+    setDrawerState({ open: true, sectionRef, rowRef, title, contextLabel });
   };
+  const closeDrawer = () => setDrawerState(s => ({ ...s, open: false }));
 
-  // The audit currently open in the engagement view
-  // For the mock phase, all engagement content still reads from SAMPLE_AUDIT (audit-001).
-  // When Supabase arrives, swap this for a lookup: ALL_AUDITS.find(a => a.id === selectedAuditId)
-  const selectedAudit = selectedAuditId
-    ? (ALL_AUDITS.find(a => a.id === selectedAuditId) || SAMPLE_AUDIT)
-    : null;
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const progressData = computeProgress(signOffs);
 
+  const inEngagement   = selectedAuditId !== null;
+  const selectedAudit  = inEngagement ? (audits.find(a => a.id === selectedAuditId) || null) : null;
+  const selectedData   = inEngagement ? (auditDataMap[selectedAuditId] || null) : null;
+
+  const openPlanningComments  = inEngagement ? getOpenCommentCount(reviewComments, 'Planning',  selectedAuditId) : 0;
+  const openFieldworkComments = inEngagement ? getOpenCommentCount(reviewComments, 'Fieldwork', selectedAuditId) : 0;
+  const openReportingComments = inEngagement ? getOpenCommentCount(reviewComments, 'Reporting', selectedAuditId) : 0;
+  const totalOpenComments     = inEngagement ? reviewComments.filter(c => c.audit_id === selectedAuditId && c.status === 'Open').length : 0;
+
+  // Comments scoped to current audit for the drawer
+  const auditComments = inEngagement
+    ? reviewComments.filter(c => c.audit_id === selectedAuditId)
+    : [];
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
   function handleSelectAudit(auditId) {
     setSelectedAuditId(auditId);
     setActiveEngagementTab('planning');
+    closeDrawer();
   }
 
   function handleBackToPortfolio() {
     setSelectedAuditId(null);
+    closeDrawer();
   }
 
-  const inEngagement = selectedAuditId !== null;
+  function handleCreateAudit(fields) {
+    const { audit, signOffs: newSOs, data } = createAudit(fields);
+    setAudits(prev => [...prev, audit]);
+    setSignOffs(prev => [...prev, ...newSOs]);
+    setAuditDataMap(prev => ({ ...prev, [audit.id]: data }));
+    // Auto-open the new audit
+    setSelectedAuditId(audit.id);
+    setActiveEngagementTab('planning');
+  }
+
+  // Update a single audit's data sub-key (e.g. 'tor', 'racmRisks', 'queries')
+  function handleUpdateAuditData(auditId, key, value) {
+    setAuditDataMap(prev => ({
+      ...prev,
+      [auditId]: { ...prev[auditId], [key]: value },
+    }));
+  }
+
+  // ── Props bundle passed to each engagement tab ─────────────────────────────
+  const engagementProps = {
+    audit:            selectedAudit,
+    auditData:        selectedData,
+    onUpdateAuditData:(key, value) => handleUpdateAuditData(selectedAuditId, key, value),
+    reviewComments:   auditComments,
+    setReviewComments:(updater) => {
+      setReviewComments(prev => {
+        const others = prev.filter(c => c.audit_id !== selectedAuditId);
+        const updated = typeof updater === 'function'
+          ? updater(auditComments)
+          : updater;
+        return [...others, ...updated];
+      });
+    },
+    currentUser:      CURRENT_USER,
+    openDrawer,
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--surface-0)' }}>
@@ -85,10 +136,9 @@ export default function App() {
         borderBottom: '1px solid var(--ni-navy-light)',
         padding: '0 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        height: 52, flexShrink: 0,
+        height: 52, flexShrink: 0, position: 'relative', zIndex: 200,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* Wordmark */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 28, height: 28, borderRadius: 6,
@@ -101,7 +151,6 @@ export default function App() {
             </span>
           </div>
 
-          {/* Back button - only shown inside an engagement */}
           {inEngagement && (
             <>
               <div style={{ width: 1, height: 20, background: 'var(--ni-navy-light)' }} />
@@ -114,28 +163,22 @@ export default function App() {
                   background: 'rgba(255,255,255,0.08)',
                   border: '1px solid rgba(255,255,255,0.15)',
                   color: 'rgba(255,255,255,0.85)',
-                  fontSize: 12, fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
+                  fontSize: 12, fontWeight: 500, cursor: 'pointer',
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.14)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
               >
-                <span style={{ fontSize: 14, lineHeight: 1 }}>&#8592;</span>
+                <span style={{ fontSize: 14 }}>&#8592;</span>
                 Portfolio
               </button>
               <div style={{ width: 1, height: 20, background: 'var(--ni-navy-light)' }} />
-              <span style={{
-                color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500,
-                maxWidth: 440, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
+              <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500, maxWidth: 440, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {selectedAudit?.title || ''}
               </span>
             </>
           )}
         </div>
 
-        {/* User avatar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#fff' }}>{CURRENT_USER.full_name}</div>
@@ -157,14 +200,18 @@ export default function App() {
         background: 'var(--surface-1)',
         borderBottom: '1px solid var(--border)',
         padding: '0 24px',
-        display: 'flex', alignItems: 'stretch', gap: 0,
+        display: 'flex', alignItems: 'stretch',
         flexShrink: 0, height: 44,
+        position: 'relative', zIndex: 200,
       }}>
         {inEngagement ? (
-          // Engagement tabs: Planning / Fieldwork / Reporting / Review Comments
           <>
             {ENGAGEMENT_TABS.map(tab => {
-              const count = tabCommentCounts[tab.id] || (tab.id === 'review' ? totalOpenComments : 0);
+              const count = tab.id === 'review'
+                ? totalOpenComments
+                : (tab.id === 'planning'  ? openPlanningComments
+                :  tab.id === 'fieldwork' ? openFieldworkComments
+                :                           openReportingComments);
               const isActive = activeEngagementTab === tab.id;
               return (
                 <button
@@ -177,8 +224,7 @@ export default function App() {
                     color: isActive ? 'var(--ni-teal)' : 'var(--text-secondary)',
                     borderBottom: `2px solid ${isActive ? 'var(--ni-teal)' : 'transparent'}`,
                     borderTop: 'none', borderLeft: 'none', borderRight: 'none',
-                    background: 'none', cursor: 'pointer',
-                    transition: 'all 0.15s', whiteSpace: 'nowrap',
+                    background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
                   }}
                 >
                   {tab.label}
@@ -195,60 +241,75 @@ export default function App() {
                 </button>
               );
             })}
-
-            {/* Audit status chip - right aligned */}
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
               <Badge label={selectedAudit?.status || ''} />
             </div>
           </>
         ) : (
-          // Portfolio home tab
-          <button
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '0 16px',
-              fontSize: 13, fontWeight: 600,
-              color: 'var(--ni-teal)',
-              borderBottom: '2px solid var(--ni-teal)',
-              borderTop: 'none', borderLeft: 'none', borderRight: 'none',
-              background: 'none', cursor: 'default',
-              whiteSpace: 'nowrap',
-            }}
-          >
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '0 16px', fontSize: 13, fontWeight: 600,
+            color: 'var(--ni-teal)',
+            borderBottom: '2px solid var(--ni-teal)',
+            borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+            background: 'none', cursor: 'default', whiteSpace: 'nowrap',
+          }}>
             Portfolio
           </button>
         )}
       </nav>
 
       {/* ── Main content ─────────────────────────────────────────────────────── */}
-      <main style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+      <main style={{ flex: 1, overflow: 'auto', padding: 24, position: 'relative' }}>
         {!inEngagement && (
           <PortfolioTab
+            audits={audits}
+            signOffs={signOffs}
+            reviewComments={reviewComments}
             onSelectAudit={handleSelectAudit}
+            onCreateAudit={handleCreateAudit}
             progressData={progressData}
           />
         )}
         {inEngagement && activeEngagementTab === 'planning' && (
           <PlanningTab
+            {...engagementProps}
             openCommentCount={openPlanningComments}
             progressData={progressData[selectedAuditId] || { planning: 0, fieldwork: 0, reporting: 0 }}
             onTabChange={setActiveEngagementTab}
           />
         )}
         {inEngagement && activeEngagementTab === 'fieldwork' && (
-          <FieldworkTab openCommentCount={openFieldworkComments} />
+          <FieldworkTab {...engagementProps} openCommentCount={openFieldworkComments} />
         )}
         {inEngagement && activeEngagementTab === 'reporting' && (
-          <ReportingTab openCommentCount={openReportingComments} />
+          <ReportingTab {...engagementProps} openCommentCount={openReportingComments} />
         )}
         {inEngagement && activeEngagementTab === 'review' && (
           <ReviewCommentsTab
-            comments={reviewComments}
-            setComments={setReviewComments}
+            comments={auditComments}
+            setComments={engagementProps.setReviewComments}
             currentUser={CURRENT_USER}
+            auditId={selectedAuditId}
           />
         )}
       </main>
+
+      {/* ── Comment Drawer — rendered once at app level, fixed overlay ─────── */}
+      {inEngagement && (
+        <CommentDrawer
+          isOpen={drawerState.open}
+          onClose={closeDrawer}
+          title={drawerState.title}
+          contextLabel={drawerState.contextLabel}
+          sectionRef={drawerState.sectionRef}
+          rowRef={drawerState.rowRef}
+          auditId={selectedAuditId}
+          comments={auditComments}
+          setComments={engagementProps.setReviewComments}
+          currentUser={CURRENT_USER}
+        />
+      )}
     </div>
   );
 }
