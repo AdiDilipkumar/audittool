@@ -1,164 +1,264 @@
 import { useState } from 'react';
-import { Card, SectionHeader, Badge, Button, Field, EmptyState, SignOffBar } from '../components/UI';
-import { QUERY_LOG, ISSUES, USERS } from '../data/mockData';
+import { Card, SectionHeader, Badge, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
 
 // ── Working Papers ────────────────────────────────────────────────────────────
-const MOCK_WORKING_PAPERS = [
-  {
-    id: 'wp-001', audit_id: 'audit-001',
-    title: 'WP01 - ThinkFolio to CRIMS Data Flow Walkthrough',
-    prepared_by: 'u-003', reviewed_by: 'u-002',
-    status: 'Final', sharepoint_url: '#', notes: 'Process confirmed with Marcus Webb and Tom Griggs on 30 Jan 2026.',
-  },
-  {
-    id: 'wp-002', audit_id: 'audit-001',
-    title: 'WP02 - Daily Reconciliation Control Testing',
-    prepared_by: 'u-003', reviewed_by: 'u-002',
-    status: 'Final', sharepoint_url: '#', notes: 'Sample of 25 reconciliation runs. 3 exceptions identified - see Q-001 and ISSUE-001.',
-  },
-  {
-    id: 'wp-003', audit_id: 'audit-001',
-    title: 'WP03 - Access Controls Testing',
-    prepared_by: 'u-004', reviewed_by: null,
-    status: 'Draft', sharepoint_url: '#', notes: 'In progress. Awaiting Q4 recertification evidence from auditee (see Q-002).',
-  },
-];
+function WorkingPapers({ papers = [], users = [], currentUser, onCreateWorkingPaper, onUpdateWorkingPaper, signOff, onSignOff }) {
+  const [showModal, setShowModal] = useState(false);
+  const [title, setTitle]         = useState('');
+  const [url, setUrl]             = useState('');
 
-function WorkingPapers() {
-  const [papers] = useState(MOCK_WORKING_PAPERS);
+  function handleSave() {
+    if (!title.trim()) return;
+    onCreateWorkingPaper({ title: title.trim(), sharepoint_url: url.trim() });
+    setTitle('');
+    setUrl('');
+    setShowModal(false);
+  }
+
+  function getUserName(id) {
+    return users.find(u => u.id === id)?.full_name || '-';
+  }
 
   return (
-    <Card style={{ padding: 20 }}>
-      <SectionHeader
-        title="Working Papers"
-        subtitle={`${papers.length} papers · ${papers.filter(p => p.status === 'Final').length} final`}
-        action={<Button variant="secondary" size="sm">+ Add Paper</Button>}
-      />
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr>
-            {['Title', 'Prepared By', 'Reviewed By', 'Status', 'SharePoint'].map(h => (
-              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', background: 'var(--surface-0)' }}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {papers.map((wp, i) => {
-            const preparedBy = USERS.find(u => u.id === wp.prepared_by);
-            const reviewedBy = USERS.find(u => u.id === wp.reviewed_by);
-            return (
-              <tr key={wp.id} style={{ borderBottom: i < papers.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <td style={{ padding: '10px 10px' }}>
-                  <div style={{ fontWeight: 500 }}>{wp.title}</div>
-                  {wp.notes && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{wp.notes}</div>}
-                </td>
-                <td style={{ padding: '10px 10px', color: 'var(--text-secondary)' }}>{preparedBy?.full_name || '-'}</td>
-                <td style={{ padding: '10px 10px', color: 'var(--text-secondary)' }}>{reviewedBy?.full_name || '-'}</td>
-                <td style={{ padding: '10px 10px' }}><Badge label={wp.status} /></td>
-                <td style={{ padding: '10px 10px' }}>
-                  <a href={wp.sharepoint_url} style={{ fontSize: 12, color: 'var(--ni-teal)', textDecoration: 'underline' }}>
-                    Open
-                  </a>
-                </td>
+    <>
+      <Card style={{ padding: 20 }}>
+        <SectionHeader
+          title="Working Papers"
+          subtitle={`${papers.length} paper${papers.length !== 1 ? 's' : ''} - ${papers.filter(p => p.status === 'Final').length} final`}
+          action={<Button variant="secondary" size="sm" onClick={() => setShowModal(true)}>+ Add Paper</Button>}
+        />
+
+        {papers.length === 0 ? (
+          <EmptyState icon="o" title="No working papers yet" description="Add working papers to document your fieldwork evidence." />
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['Title', 'Prepared By', 'Status', 'SharePoint'].map(h => (
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', background: 'var(--surface-0)' }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </Card>
+            </thead>
+            <tbody>
+              {papers.map((wp, i) => (
+                <tr key={wp.id} style={{ borderBottom: i < papers.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <td style={{ padding: '10px 10px', fontWeight: 500 }}>{wp.title}</td>
+                  <td style={{ padding: '10px 10px', color: 'var(--text-secondary)' }}>{getUserName(wp.created_by)}</td>
+                  <td style={{ padding: '10px 10px' }}>
+                    <select
+                      value={wp.status}
+                      onChange={e => onUpdateWorkingPaper(wp.id, { status: e.target.value })}
+                      style={{ fontSize: 12, padding: '3px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface-0)', fontFamily: 'var(--font-sans)', cursor: 'pointer' }}
+                    >
+                      {['Draft', 'In Progress', 'Final'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '10px 10px' }}>
+                    {wp.sharepoint_url
+                      ? <a href={wp.sharepoint_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--ni-teal)', textDecoration: 'underline' }}>Open</a>
+                      : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>-</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {showModal && (
+        <Modal title="Add Working Paper" onClose={() => setShowModal(false)} width={480}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Title *" value={title} onChange={setTitle} hint="e.g. WP01 - Process Walkthrough" />
+            <Field label="SharePoint URL" value={url} onChange={setUrl} hint="Paste the SharePoint link to the working paper file" />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button variant="primary" disabled={!title.trim()} onClick={handleSave}>Add Paper</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
 // ── Query Log ─────────────────────────────────────────────────────────────────
-function QueryLog() {
-  const [queries, setQueries] = useState(QUERY_LOG);
+function QueryLog({ queries = [], users = [], currentUser, auditId, onCreateQuery, onUpdateQuery, onPromoteToIssue }) {
   const [expandedId, setExpandedId] = useState(null);
+  const [showModal, setShowModal]   = useState(false);
+  const [showResolveId, setShowResolveId] = useState(null);
+  const [title, setTitle]           = useState('');
+  const [detail, setDetail]         = useState('');
+  const [directedTo, setDirectedTo] = useState('');
+  const [rationale, setRationale]   = useState('');
+
+  function getUserName(id) {
+    return users.find(u => u.id === id)?.full_name || '-';
+  }
+
+  function handleRaiseQuery() {
+    if (!title.trim() || !detail.trim()) return;
+    onCreateQuery({
+      audit_id: auditId,
+      title: title.trim(),
+      description: detail.trim(),
+      directed_to: directedTo.trim(),
+    });
+    setTitle(''); setDetail(''); setDirectedTo('');
+    setShowModal(false);
+  }
+
+  function handleResolve() {
+    if (!rationale.trim()) return;
+    onUpdateQuery(showResolveId, { status: 'Resolved', resolved_rationale: rationale.trim() });
+    setRationale('');
+    setShowResolveId(null);
+  }
+
+  function handlePromote(query) {
+    onPromoteToIssue && onPromoteToIssue(query);
+  }
+
+  const openCount = queries.filter(q => q.status === 'Open').length;
 
   return (
-    <Card style={{ padding: 20 }}>
-      <SectionHeader
-        title="Query Log"
-        subtitle={`${queries.length} queries · ${queries.filter(q => q.status === 'Open').length} open`}
-        action={<Button variant="secondary" size="sm">+ Raise Query</Button>}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {queries.map(q => {
-          const raisedBy = USERS.find(u => u.id === q.raised_by);
-          const isExpanded = expandedId === q.id;
-          return (
-            <div key={q.id} style={{
-              border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
-              overflow: 'hidden',
-            }}>
-              <div
-                onClick={() => setExpandedId(isExpanded ? null : q.id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer', background: 'var(--surface-0)' }}
-              >
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ni-teal)', width: 44 }}>
-                  {q.query_ref}
-                </span>
-                <p style={{ flex: 1, fontSize: 13, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {q.description}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{q.directed_to}</span>
-                  <Badge label={q.status} />
-                  <span style={{ color: 'var(--text-muted)' }}>{isExpanded ? '−' : '+'}</span>
-                </div>
-              </div>
-              {isExpanded && (
-                <div style={{ padding: 14, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Query</label>
-                    <p style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{q.description}</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      Raised by <strong>{raisedBy?.full_name}</strong> on {new Date(q.raised_date).toLocaleDateString('en-GB')}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      Directed to <strong>{q.directed_to}</strong>
+    <>
+      <Card style={{ padding: 20 }}>
+        <SectionHeader
+          title="Query Log"
+          subtitle={`${queries.length} quer${queries.length !== 1 ? 'ies' : 'y'} - ${openCount} open`}
+          action={<Button variant="secondary" size="sm" onClick={() => setShowModal(true)}>+ Raise Query</Button>}
+        />
+
+        {queries.length === 0 ? (
+          <EmptyState icon="?" title="No queries raised" description="Raise queries to request information or evidence from the auditee." />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {queries.map(q => {
+              const isExpanded = expandedId === q.id;
+              return (
+                <div key={q.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                  <div
+                    onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer', background: 'var(--surface-0)' }}
+                  >
+                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ni-teal)', width: 52, flexShrink: 0 }}>
+                      {q.query_ref}
+                    </span>
+                    <p style={{ flex: 1, fontSize: 13, fontWeight: 500, lineHeight: 1.4 }}>{q.title || q.description}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{q.directed_to}</span>
+                      <Badge label={q.status} />
+                      <span style={{ color: 'var(--text-muted)' }}>{isExpanded ? '-' : '+'}</span>
                     </div>
                   </div>
-                  {q.response ? (
-                    <div style={{ background: 'var(--status-green-bg)', border: '1px solid var(--status-green-border)', borderRadius: 'var(--radius-md)', padding: 12, marginBottom: 12 }}>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                        Auditee Response · {q.response_date && new Date(q.response_date).toLocaleDateString('en-GB')}
-                      </label>
-                      <p style={{ fontSize: 13, lineHeight: 1.6 }}>{q.response}</p>
+
+                  {isExpanded && (
+                    <div style={{ padding: 14, borderTop: '1px solid var(--border)' }}>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Query Detail</label>
+                        <p style={{ fontSize: 13, lineHeight: 1.6 }}>{q.description}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+                        <span>Raised by <strong>{getUserName(q.raised_by)}</strong> on {q.raised_date ? new Date(q.raised_date).toLocaleDateString('en-GB') : '-'}</span>
+                        {q.directed_to && <span>Directed to <strong>{q.directed_to}</strong></span>}
+                      </div>
+
+                      {q.response ? (
+                        <div style={{ background: 'var(--status-green-bg)', border: '1px solid var(--status-green-border)', borderRadius: 'var(--radius-md)', padding: 12, marginBottom: 12 }}>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                            Auditee Response{q.response_date ? ` - ${new Date(q.response_date).toLocaleDateString('en-GB')}` : ''}
+                          </label>
+                          <p style={{ fontSize: 13, lineHeight: 1.6 }}>{q.response}</p>
+                        </div>
+                      ) : (
+                        <div style={{ background: 'var(--status-amber-bg)', borderRadius: 'var(--radius-md)', padding: 10, marginBottom: 12, fontSize: 12, color: 'var(--status-amber)' }}>
+                          Awaiting auditee response
+                        </div>
+                      )}
+
+                      {q.resolved_rationale && (
+                        <div style={{ background: 'var(--surface-0)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 10, marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+                          <strong>Resolution rationale:</strong> {q.resolved_rationale}
+                        </div>
+                      )}
+
+                      {q.promoted_to_issue_id && (
+                        <div style={{ fontSize: 12, color: 'var(--status-blue)', background: 'var(--status-blue-bg)', border: '1px solid var(--status-blue-border)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', display: 'inline-block', marginBottom: 8 }}>
+                          Promoted to issue
+                        </div>
+                      )}
+
+                      {q.status === 'Open' && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <Button variant="secondary" size="sm" onClick={() => setShowResolveId(q.id)}>Resolve</Button>
+                          <Button variant="secondary" size="sm" onClick={() => handlePromote(q)}>Promote to Issue</Button>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ background: 'var(--status-amber-bg)', borderRadius: 'var(--radius-md)', padding: 10, marginBottom: 12, fontSize: 12, color: 'var(--status-amber)' }}>
-                      Awaiting auditee response
-                    </div>
-                  )}
-                  {q.status === 'Promoted' && (
-                    <div style={{ fontSize: 12, color: 'var(--status-blue)', background: 'var(--status-blue-bg)', border: '1px solid var(--status-blue-border)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', display: 'inline-block' }}>
-                      Promoted to ISSUE-001
-                    </div>
-                  )}
-                  {q.status === 'Open' && q.response && (
-                    <Button variant="secondary" size="sm">Promote to Issue</Button>
                   )}
                 </div>
-              )}
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Raise Query Modal */}
+      {showModal && (
+        <Modal title="Raise Query" onClose={() => setShowModal(false)} width={520}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Query Title *" value={title} onChange={setTitle} />
+            <Field label="Query Detail *" value={detail} onChange={setDetail} multiline rows={4} hint="Be specific about what evidence or information is being requested." />
+            <Field label="Directed To" value={directedTo} onChange={setDirectedTo} hint="Auditee contact name (optional)" />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button variant="primary" disabled={!title.trim() || !detail.trim()} onClick={handleRaiseQuery}>Raise Query</Button>
             </div>
-          );
-        })}
-      </div>
-    </Card>
+          </div>
+        </Modal>
+      )}
+
+      {/* Resolve Modal */}
+      {showResolveId && (
+        <Modal title="Resolve Query" onClose={() => setShowResolveId(null)} width={480}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Resolution Rationale *" value={rationale} onChange={setRationale} multiline rows={4} hint="Explain why this query is being closed." />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Button variant="ghost" onClick={() => setShowResolveId(null)}>Cancel</Button>
+              <Button variant="primary" disabled={!rationale.trim()} onClick={handleResolve}>Mark Resolved</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
 // ── Fieldwork Tab ─────────────────────────────────────────────────────────────
-export default function FieldworkTab({ openCommentCount }) {
+export default function FieldworkTab({
+  audit, auditData, currentUser, users = [],
+  onCreateQuery, onUpdateQuery,
+  onCreateWorkingPaper, onUpdateWorkingPaper,
+  onSignOff, signOffs = [],
+  openCommentCount,
+  onPromoteToIssue,
+}) {
   const [activeSection, setActiveSection] = useState('papers');
-  const signOff = null; // Not yet signed off
+
+  const papers  = auditData?.workingPapers || [];
+  const queries = auditData?.queries || [];
+
+  const signOff = signOffs.find(s => s.tab === 'Fieldwork') || null;
+
+  const allPapersFinal = papers.length > 0 && papers.every(p => p.status === 'Final');
+  const noOpenQueries  = queries.every(q => q.status !== 'Open');
+  const canSignOff     = allPapersFinal && noOpenQueries;
 
   const sections = [
-    { id: 'papers', label: 'Working Papers' },
+    { id: 'papers',  label: 'Working Papers' },
     { id: 'queries', label: 'Query Log' },
     { id: 'signoff', label: 'Sign-off' },
   ];
@@ -180,14 +280,40 @@ export default function FieldworkTab({ openCommentCount }) {
         ))}
       </div>
 
-      {activeSection === 'papers'  && <WorkingPapers />}
-      {activeSection === 'queries' && <QueryLog />}
+      {activeSection === 'papers' && (
+        <WorkingPapers
+          papers={papers} users={users} currentUser={currentUser}
+          onCreateWorkingPaper={onCreateWorkingPaper}
+          onUpdateWorkingPaper={onUpdateWorkingPaper}
+        />
+      )}
+
+      {activeSection === 'queries' && (
+        <QueryLog
+          queries={queries} users={users} currentUser={currentUser}
+          auditId={audit?.id}
+          onCreateQuery={onCreateQuery}
+          onUpdateQuery={onUpdateQuery}
+          onPromoteToIssue={onPromoteToIssue}
+        />
+      )}
+
       {activeSection === 'signoff' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ padding: '12px 16px', background: 'var(--status-amber-bg)', border: '1px solid var(--status-amber-border)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--status-amber)' }}>
-            Fieldwork is in progress. Sign-off is available once all working papers are marked Final and outstanding queries are resolved.
-          </div>
-          <SignOffBar signOff={{ auditor_id: 'u-003', auditor_signed_at: null, reviewer_id: 'u-002', reviewer_signed_at: null, hia_id: 'u-001', hia_signed_at: null }} />
+          {!canSignOff && (
+            <div style={{ padding: '12px 16px', background: 'var(--status-amber-bg)', border: '1px solid var(--status-amber-border)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--status-amber)' }}>
+              Sign-off is available once all working papers are marked Final and there are no open queries.
+              {!allPapersFinal && <span> ({papers.filter(p => p.status !== 'Final').length} paper{papers.filter(p => p.status !== 'Final').length !== 1 ? 's' : ''} not final.)</span>}
+              {!noOpenQueries && <span> ({queries.filter(q => q.status === 'Open').length} open {queries.filter(q => q.status === 'Open').length !== 1 ? 'queries' : 'query'}.)</span>}
+            </div>
+          )}
+          {signOff && (
+            <SignOffBar
+              signOff={signOff}
+              currentUser={currentUser}
+              onSign={canSignOff ? (role) => onSignOff(signOff.id, role) : null}
+            />
+          )}
         </div>
       )}
     </div>
