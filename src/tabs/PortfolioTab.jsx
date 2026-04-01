@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Card, Badge, SectionHeader, NewAuditModal } from '../components/UI';
-import { USERS } from '../data/mockData';
+import { Card, Badge, SectionHeader, NewAuditModal, EmptyState } from '../components/UI';
 
 function ProgressCircle({ pct, label, size = 36 }) {
   const radius = (size - 4) / 2;
@@ -64,36 +63,51 @@ function MiniBarChart({ data, colorFn }) {
   );
 }
 
-export default function PortfolioTab({ audits = [], signOffs = [], reviewComments = [], onSelectAudit, onCreateAudit, progressData = {} }) {
+export default function PortfolioTab({
+  audits = [], signOffs = [], reviewComments = [],
+  onSelectAudit, onCreateAudit, onDeleteAudit,
+  progressData = {}, currentUser, users = [],
+}) {
   const [showNewAuditModal, setShowNewAuditModal] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId]     = useState(null);
 
-  // Derive all issues across all audits from auditDataMap — for now derive from audits' open_issues count
-  // Full issues list is available via auditDataMap in App but not passed here to keep props lean.
-  // Portfolio-level counts come from the audit objects themselves.
-  const allIssues = audits.flatMap(a => {
-    // Build minimal issue stubs for the tracker from audit-level counts
-    // Real issues are in auditDataMap — full issues tracker can be wired in a later session
-    return [];
-  });
-
-  const openIssuesTotal = audits.reduce((sum, a) => sum + (a.open_issues || 0), 0);
   const openCommentsTotal = reviewComments.filter(c => c.status === 'Open').length;
 
   const auditsByStatus = ['Planning', 'Fieldwork', 'Reporting', 'Complete'].map(s => ({
     label: s, value: audits.filter(a => a.status === s).length,
   }));
 
-  const ratingColors  = { 'Very High': 'var(--risk-very-high)', 'High': 'var(--risk-high)', 'Medium': 'var(--risk-medium)', 'Low': 'var(--risk-low)' };
-  const statusColors  = { 'Planning': 'var(--status-blue)', 'Fieldwork': 'var(--status-amber)', 'Reporting': 'var(--ni-teal)', 'Complete': 'var(--status-green)' };
+  const statusColors = {
+    'Planning':  'var(--status-blue)',
+    'Fieldwork': 'var(--status-amber)',
+    'Reporting': 'var(--ni-teal)',
+    'Complete':  'var(--status-green)',
+  };
+
+  function getUserName(id) {
+    return users.find(u => u.id === id)?.full_name || '-';
+  }
+
+  function handleDeleteClick(e, auditId) {
+    e.stopPropagation();
+    setConfirmDeleteId(auditId);
+  }
+
+  function handleConfirmDelete() {
+    if (confirmDeleteId) {
+      onDeleteAudit(confirmDeleteId);
+      setConfirmDeleteId(null);
+    }
+  }
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Key metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <MetricCard label="Active Audits" value={audits.filter(a => a.status !== 'Complete').length} sub={`of ${audits.length} total`} color="var(--ni-teal)" />
-        <MetricCard label="Open Issues" value={openIssuesTotal} sub="across all audits" color="var(--status-amber)" />
-        <MetricCard label="Overdue Actions" value={0} sub="past due date" color="var(--status-green)" />
+        <MetricCard label="Active Audits"        value={audits.filter(a => a.status !== 'Complete').length} sub={`of ${audits.length} total`}  color="var(--ni-teal)" />
+        <MetricCard label="Open Issues"          value={0}                sub="across all audits"  color="var(--status-amber)" />
+        <MetricCard label="Overdue Actions"      value={0}                sub="past due date"      color="var(--status-green)" />
         <MetricCard label="Open Review Comments" value={openCommentsTotal} sub="awaiting response" color={openCommentsTotal > 0 ? 'var(--status-amber)' : 'var(--status-green)'} />
       </div>
 
@@ -107,7 +121,7 @@ export default function PortfolioTab({ audits = [], signOffs = [], reviewComment
           <SectionHeader title="Open Issues by Rating" />
           <MiniBarChart
             data={['Very High','High','Medium','Low'].map(r => ({ label: r, value: 0 }))}
-            colorFn={l => ratingColors[l]}
+            colorFn={() => 'var(--ni-teal)'}
           />
         </Card>
       </div>
@@ -116,14 +130,13 @@ export default function PortfolioTab({ audits = [], signOffs = [], reviewComment
       <Card style={{ padding: 20 }}>
         <SectionHeader
           title="Audit Portfolio"
-          subtitle={`${audits.length} audit${audits.length !== 1 ? 's' : ''} · click a row to open engagement`}
+          subtitle={`${audits.length} audit${audits.length !== 1 ? 's' : ''} - click a row to open`}
           action={
             <button
               onClick={() => setShowNewAuditModal(true)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '7px 14px',
-                background: 'var(--ni-teal)', color: '#fff',
+                padding: '7px 14px', background: 'var(--ni-teal)', color: '#fff',
                 border: 'none', borderRadius: 'var(--radius-md)',
                 fontSize: 13, fontWeight: 500, cursor: 'pointer',
               }}
@@ -132,87 +145,136 @@ export default function PortfolioTab({ audits = [], signOffs = [], reviewComment
             </button>
           }
         />
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: 'var(--surface-0)' }}>
-              {['Audit', 'Entity', 'Type', 'Lead', 'Status', 'Progress', 'Issues', 'Comments'].map(h => (
-                <th key={h} style={{
-                  padding: '8px 10px', textAlign: 'left',
-                  fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
-                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                  borderBottom: '1px solid var(--border)',
-                }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {audits.map((audit, i) => {
-              const lead = USERS.find(u => u.id === audit.lead_auditor_id);
-              const prog = progressData[audit.id] || { planning: 0, fieldwork: 0, reporting: 0 };
-              const auditOpenComments = reviewComments.filter(c => c.audit_id === audit.id && c.status === 'Open').length;
-              const isLast = i === audits.length - 1;
 
-              return (
-                <tr
-                  key={audit.id}
-                  onClick={() => onSelectAudit && onSelectAudit(audit.id)}
-                  style={{ borderBottom: isLast ? 'none' : '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.12s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-0)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <td style={{ padding: '12px 10px' }}>
-                    <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--ni-teal)' }}>{audit.title}</span>
-                  </td>
-                  <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{audit.entity}</td>
-                  <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{audit.audit_type}</td>
-                  <td style={{ padding: '12px 10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{lead?.full_name || '-'}</td>
-                  <td style={{ padding: '12px 10px' }}><Badge label={audit.status} /></td>
-                  <td style={{ padding: '8px 10px' }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      <ProgressCircle pct={prog.planning}  label="Plan" />
-                      <ProgressCircle pct={prog.fieldwork} label="Field" />
-                      <ProgressCircle pct={prog.reporting} label="Report" />
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
-                    {(audit.open_issues || 0) > 0
-                      ? <span style={{ color: 'var(--status-amber)', fontWeight: 600 }}>{audit.open_issues}</span>
-                      : <span style={{ color: 'var(--text-muted)' }}>-</span>}
-                  </td>
-                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
-                    {auditOpenComments > 0
-                      ? <span style={{ color: 'var(--status-amber)', fontWeight: 600 }}>{auditOpenComments}</span>
-                      : <span style={{ color: 'var(--text-muted)' }}>-</span>}
-                  </td>
+        {audits.length === 0 ? (
+          <EmptyState
+            icon="o"
+            title="No audits yet"
+            description="Create your first audit to get started. Each audit will appear here once created."
+            action={
+              <button
+                onClick={() => setShowNewAuditModal(true)}
+                style={{ padding: '8px 16px', background: 'var(--ni-teal)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+              >
+                + New Audit
+              </button>
+            }
+          />
+        ) : (
+          <>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-0)' }}>
+                  {['Audit', 'Entity', 'Type', 'Lead', 'Status', 'Progress', 'Comments', ''].map(h => (
+                    <th key={h} style={{
+                      padding: '8px 10px', textAlign: 'left',
+                      fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      borderBottom: '1px solid var(--border)',
+                    }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {audits.map((audit, i) => {
+                  const prog = progressData[audit.id] || { planning: 0, fieldwork: 0, reporting: 0 };
+                  const auditOpenComments = reviewComments.filter(c => c.audit_id === audit.id && c.status === 'Open').length;
+                  const isLast = i === audits.length - 1;
 
-        {/* Legend */}
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Progress circles:</span>
-          {[
-            { color: 'var(--status-amber)', label: '33% Auditor signed' },
-            { color: 'var(--ni-teal)',      label: '67% Reviewer signed' },
-            { color: 'var(--status-green)', label: '100% HIA signed' },
-          ].map(item => (
-            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }} />
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.label}</span>
+                  return (
+                    <tr
+                      key={audit.id}
+                      onClick={() => onSelectAudit && onSelectAudit(audit.id)}
+                      style={{ borderBottom: isLast ? 'none' : '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.12s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-0)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ padding: '12px 10px' }}>
+                        <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--ni-teal)' }}>{audit.title}</span>
+                      </td>
+                      <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{audit.entity || '-'}</td>
+                      <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{audit.audit_type}</td>
+                      <td style={{ padding: '12px 10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {getUserName(audit.lead_auditor_id)}
+                      </td>
+                      <td style={{ padding: '12px 10px' }}><Badge label={audit.status} /></td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <ProgressCircle pct={prog.planning}  label="Plan" />
+                          <ProgressCircle pct={prog.fieldwork} label="Field" />
+                          <ProgressCircle pct={prog.reporting} label="Report" />
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 10px', textAlign: 'center' }}>
+                        {auditOpenComments > 0
+                          ? <span style={{ color: 'var(--status-amber)', fontWeight: 600 }}>{auditOpenComments}</span>
+                          : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                      </td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={e => handleDeleteClick(e, audit.id)}
+                          style={{
+                            fontSize: 11, color: 'var(--text-muted)',
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '3px 6px', borderRadius: 'var(--radius-sm)',
+                          }}
+                          title="Delete audit"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Progress legend */}
+            <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Progress:</span>
+              {[
+                { color: 'var(--status-amber)', label: '33% Audit Lead signed' },
+                { color: 'var(--ni-teal)',      label: '67% Reviewer signed' },
+                { color: 'var(--status-green)', label: '100% HIA signed' },
+              ].map(item => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }} />
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.label}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </Card>
+
+      {/* Delete confirmation */}
+      {confirmDeleteId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,22,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: 'var(--surface-1)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', padding: 28, maxWidth: 400, width: '100%' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Delete audit?</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+              This will permanently delete the audit and all associated data including queries, issues, working papers, and comments. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDeleteId(null)} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                Cancel
+              </button>
+              <button onClick={handleConfirmDelete} style={{ padding: '7px 14px', background: 'var(--status-red)', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#fff' }}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Audit Modal */}
       {showNewAuditModal && (
         <NewAuditModal
           onClose={() => setShowNewAuditModal(false)}
           onSubmit={(fields) => { onCreateAudit(fields); setShowNewAuditModal(false); }}
+          users={users}
         />
       )}
     </div>

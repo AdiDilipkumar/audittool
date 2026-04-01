@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
 import { SignOffBar } from '../components/UI';
-import { SIGN_OFFS } from '../data/mockData';
 import PlanningAuditDetails      from './PlanningAuditDetails';
 import PlanningInherentRisk      from './PlanningInherentRisk';
 import PlanningCombinedAssurance from './PlanningCombinedAssurance';
@@ -22,7 +21,7 @@ function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 
   else if (pct === 67) fillColor = 'var(--ni-teal)';
   else                 fillColor = 'var(--status-green)';
 
-  const tierLabel = pct === 0 ? 'None' : pct === 33 ? 'Auditor' : pct === 67 ? 'Reviewer' : 'HIA';
+  const tierLabel = pct === 0 ? 'None' : pct === 33 ? 'Lead' : pct === 67 ? 'Reviewer' : 'HIA';
 
   return (
     <button
@@ -33,18 +32,14 @@ function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 
         background: isActiveTab ? 'var(--ni-teal-dim)' : 'transparent',
         border: `1px solid ${isActiveTab ? 'rgba(0,167,157,0.3)' : 'transparent'}`,
         borderRadius: 'var(--radius-md)',
-        padding: '8px 12px',
-        cursor: 'pointer',
-        transition: 'background 0.15s',
+        padding: '8px 12px', cursor: 'pointer', transition: 'background 0.15s',
       }}
     >
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--border)" strokeWidth={3} />
         {pct > 0 && (
-          <circle cx={size/2} cy={size/2} r={radius}
-            fill="none" stroke={fillColor} strokeWidth={3}
-            strokeDasharray={`${strokeDash} ${circumference}`} strokeLinecap="round"
-          />
+          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={fillColor} strokeWidth={3}
+            strokeDasharray={`${strokeDash} ${circumference}`} strokeLinecap="round" />
         )}
         <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
           style={{ transform: `rotate(90deg)`, transformOrigin: `${size/2}px ${size/2}px` }}
@@ -53,11 +48,7 @@ function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 
           {pct === 0 ? '-' : `${pct}%`}
         </text>
       </svg>
-      <span style={{
-        fontSize: 11, fontWeight: isActiveTab ? 600 : 500,
-        color: isActiveTab ? 'var(--ni-teal)' : 'var(--text-secondary)',
-        letterSpacing: '0.01em',
-      }}>
+      <span style={{ fontSize: 11, fontWeight: isActiveTab ? 600 : 500, color: isActiveTab ? 'var(--ni-teal)' : 'var(--text-secondary)', letterSpacing: '0.01em' }}>
         {label}
       </span>
       <span style={{ fontSize: 10, color: pct === 0 ? 'var(--text-muted)' : fillColor, fontWeight: 500 }}>
@@ -69,22 +60,24 @@ function TabProgressCircle({ pct, label, tabId, activeTabId, onClick, size = 44 
 
 // ── Planning Tab shell ─────────────────────────────────────────────────────────
 export default function PlanningTab({
-  // Navigation / progress
   openCommentCount,
   progressData = { planning: 0, fieldwork: 0, reporting: 0 },
   onTabChange,
-  // Engagement data (passed down from App via engagementProps)
   audit,
   auditData,
   onUpdateAuditData,
   reviewComments = [],
-  setReviewComments,
   currentUser,
+  users = [],
   openDrawer,
+  signOffs = [],
+  onSignOff,
 }) {
   const [activeSection, setActiveSection] = useState('details');
-  const signOff = SIGN_OFFS.find(s => s.tab === 'Planning');
   const topRef = useRef(null);
+
+  // Get the Planning sign-off row for this audit
+  const signOff = signOffs.find(s => s.tab === 'Planning') || null;
 
   function handleProgressClick(tabId) {
     if (tabId === 'planning') {
@@ -95,24 +88,24 @@ export default function PlanningTab({
   }
 
   const sections = [
-    { id: 'details',   label: 'Audit Details'       },
-    { id: 'risk',      label: 'Inherent Risk'        },
-    { id: 'assurance', label: 'Combined Assurance'   },
-    { id: 'scope',     label: 'Scope Determination'  },
-    { id: 'tor',       label: 'Terms of Reference'   },
-    { id: 'programme', label: 'Audit Programme'      },
-    { id: 'racm',      label: 'RACM'                 },
-    { id: 'signoff',   label: 'Sign-off'             },
+    { id: 'details',   label: 'Audit Details'      },
+    { id: 'risk',      label: 'Inherent Risk'       },
+    { id: 'assurance', label: 'Combined Assurance'  },
+    { id: 'scope',     label: 'Scope Determination' },
+    { id: 'tor',       label: 'Terms of Reference'  },
+    { id: 'programme', label: 'Audit Programme'     },
+    { id: 'racm',      label: 'RACM'                },
+    { id: 'signoff',   label: 'Sign-off'            },
   ];
 
-  // Common props forwarded to every sub-component that supports the drawer
+  // Common props forwarded to every sub-component
   const subProps = {
     audit,
     auditData,
     onUpdateAuditData,
     reviewComments,
-    setReviewComments,
     currentUser,
+    users,
     openDrawer,
   };
 
@@ -121,10 +114,9 @@ export default function PlanningTab({
 
       {/* Progress circles strip */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        marginBottom: 20, padding: '12px 16px',
-        background: 'var(--surface-1)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
+        display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20,
+        padding: '12px 16px', background: 'var(--surface-1)',
+        border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 8 }}>
           Sign-off
@@ -136,7 +128,7 @@ export default function PlanningTab({
         <TabProgressCircle pct={progressData.reporting} label="Reporting" tabId="reporting" activeTabId="planning" onClick={() => handleProgressClick('reporting')} />
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', lineHeight: 1.5 }}>
-          <div>33% = Auditor &nbsp;&bull;&nbsp; 67% = Reviewer &nbsp;&bull;&nbsp; 100% = HIA</div>
+          <div>33% = Audit Lead &nbsp;&bull;&nbsp; 67% = Reviewer &nbsp;&bull;&nbsp; 100% = HIA</div>
           <div style={{ marginTop: 2 }}>Click a circle to jump to that tab</div>
         </div>
       </div>
@@ -157,7 +149,7 @@ export default function PlanningTab({
         ))}
       </div>
 
-      {/* Section content — subProps forwarded to every section */}
+      {/* Section content */}
       {activeSection === 'details'   && <PlanningAuditDetails   {...subProps} />}
       {activeSection === 'risk'      && <PlanningInherentRisk   {...subProps} />}
       {activeSection === 'assurance' && <PlanningCombinedAssurance {...subProps} />}
@@ -165,18 +157,21 @@ export default function PlanningTab({
       {activeSection === 'tor'       && <PlanningToR            {...subProps} />}
       {activeSection === 'programme' && <PlanningProgramme      {...subProps} />}
       {activeSection === 'racm'      && <PlanningRACM           {...subProps} />}
-      {activeSection === 'signoff'   && (
+
+      {activeSection === 'signoff' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{
-            padding: '12px 16px',
-            background: 'var(--status-amber-bg)',
-            border: '1px solid var(--status-amber-border)',
-            borderRadius: 'var(--radius-md)',
-            fontSize: 13, color: 'var(--status-amber)',
-          }}>
-            Planning is signed off at Reviewer level. HIA sign-off is pending.
-          </div>
-          <SignOffBar signOff={signOff} />
+          {!signOff && (
+            <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--text-muted)' }}>
+              Sign-off record not found for this engagement.
+            </div>
+          )}
+          {signOff && (
+            <SignOffBar
+              signOff={signOff}
+              currentUser={currentUser}
+              onSign={(role) => onSignOff && onSignOff(signOff.id, role)}
+            />
+          )}
         </div>
       )}
     </div>
