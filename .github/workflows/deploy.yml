@@ -32,7 +32,7 @@ jobs:
       - name: Install Supabase client
         run: npm install @supabase/supabase-js
 
-        - name: Check env vars
+      - name: Check env vars
         run: |
           echo "URL set: ${{ secrets.VITE_SUPABASE_URL != '' }}"
           echo "KEY set: ${{ secrets.VITE_SUPABASE_ANON_KEY != '' }}"
