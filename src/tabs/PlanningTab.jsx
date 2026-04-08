@@ -253,12 +253,12 @@ export default function PlanningTab({
       </div>
 
       {/* Section content */}
-      {activeSection === 'details'   && <PlanningAuditDetails   {...subProps} />}
+      {activeSection === 'details'   && <PlanningAuditDetails   key={dataKey} {...subProps} />}
       {activeSection === 'risk'      && <PlanningInherentRisk   key={dataKey} {...subProps} />}
       {activeSection === 'assurance' && <PlanningCombinedAssurance key={dataKey} {...subProps} />}
       {activeSection === 'scope'     && <PlanningScope          key={dataKey} {...subProps} />}
       {activeSection === 'tor'       && <PlanningToR            key={dataKey} {...subProps} />}
-      {activeSection === 'racm'      && <PlanningRACM           key={dataKey} {...subProps} onTabChange={onTabChange} />}
+      {activeSection === 'racm'      && <PlanningRACM           {...subProps} onTabChange={onTabChange} />}
 
       {activeSection === 'queries' && (
         <PlanningQueryLog

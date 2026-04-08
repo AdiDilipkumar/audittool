@@ -11,7 +11,7 @@ const RISK_MATRIX = (l, i) => {
   return                  { label: 'Low',        color: 'var(--risk-low)' };
 };
 
-const DE_OPTIONS       = ['Not Tested', 'Effective', 'Ineffective'];
+const DESIGN_OPTIONS   = ['Not Assessed', 'Adequate', 'Inadequate', 'Missing'];
 const CTRL_TYPE_OPTIONS = ['Preventive', 'Detective', 'Corrective'];
 const FREQ_OPTIONS     = ['Per event', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
 const L_LABELS         = { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely' };
@@ -170,7 +170,7 @@ function AddControlModal({ riskRef, onAdd, onClose }) {
       test_approach:        form.test_approach.trim(),
       sample_size:          Number(form.sample_size) || 25,
       sample_override:      false,
-      design_conclusion:    'Not Tested',
+      design_conclusion:    'Not Assessed',
       operating_effectiveness: 'Not Tested',
       testing_status_fw:    'Not Started',
     });
@@ -427,11 +427,11 @@ export default function PlanningRACM({ auditData, onUpdateAuditData, reviewComme
                           <div>
                             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Design</label>
                             <select
-                              value={ctrl.design_conclusion || 'Not Tested'}
+                              value={ctrl.design_conclusion || 'Not Assessed'}
                               onChange={e => updateControl(risk.id, ctrl.id, 'design_conclusion', e.target.value)}
                               style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-1)', fontFamily: 'var(--font-sans)', width: '100%', color: 'var(--text-primary)' }}
                             >
-                              {DE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                              {DESIGN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                           </div>
                           <div>

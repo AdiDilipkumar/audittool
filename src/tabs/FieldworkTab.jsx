@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, SectionHeader, Badge, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const OE_OPTIONS     = ['Not Tested', 'Effective', 'Ineffective'];
+const OE_OPTIONS     = ['Not Tested', 'Effective', 'Partially Effective', 'Ineffective'];
 const STATUS_OPTIONS = ['Not Started', 'In Progress', 'Complete'];
 
 const STATUS_COLORS = {
@@ -12,9 +12,10 @@ const STATUS_COLORS = {
 };
 
 const OE_COLORS = {
-  'Not Tested':  { bg: 'var(--surface-1)',       border: 'var(--border)',              text: 'var(--text-muted)'   },
-  'Effective':   { bg: 'var(--status-green-bg)', border: 'var(--status-green-border)', text: 'var(--status-green)' },
-  'Ineffective': { bg: 'var(--status-red-bg)',   border: 'var(--status-red-border)',   text: 'var(--status-red)'   },
+  'Not Tested':         { bg: 'var(--surface-1)',       border: 'var(--border)',              text: 'var(--text-muted)'   },
+  'Effective':          { bg: 'var(--status-green-bg)', border: 'var(--status-green-border)', text: 'var(--status-green)' },
+  'Partially Effective':{ bg: 'var(--status-amber-bg)', border: 'var(--status-amber-border)', text: 'var(--status-amber)' },
+  'Ineffective':        { bg: 'var(--status-red-bg)',   border: 'var(--status-red-border)',   text: 'var(--status-red)'   },
 };
 
 function StatusSelect({ value, options, colors, onChange }) {
@@ -308,9 +309,9 @@ function ControlCard({ risk, ctrl, queries, users, currentUser, auditId,
           />
 
           {/* Ineffective alert */}
-          {oe === 'Ineffective' && (
+          {(oe === 'Ineffective' || oe === 'Partially Effective') && (
             <div style={{ padding: '8px 12px', background: 'var(--status-amber-bg)', border: '1px solid var(--status-amber-border)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--status-amber)' }}>
-              O/E = Ineffective — raise a query above or promote to an issue via the query log.
+              O/E = {oe} — raise a query above or promote to an issue via the query log.
             </div>
           )}
         </div>

@@ -27,134 +27,137 @@ export default function PlanningToR({ audit, auditData, onUpdateAuditData, revie
     onUpdateAuditData?.('tor', updated);
   }
 
-  // Check if all 6 fields have content (for sign-off gate)
   const allFieldsFilled = TOR_FIELDS.every(f => data[f.key]?.trim()?.length >= 10);
 
-  async function handleExportTOR() {
+  function handleExportTOR() {
     setExporting(true);
     try {
-      // Build team table rows from audit roles
+      // Build team rows
       const team = [];
       if (audit?.lead_auditor_id) {
-        const lead = users.find(u => u.id === audit.lead_auditor_id);
-        if (lead) team.push({ name: lead.full_name, role: 'Audit Lead' });
+        const u = users.find(u => u.id === audit.lead_auditor_id);
+        if (u) team.push({ name: u.full_name, role: 'Audit Lead' });
       }
       if (audit?.reviewer_id) {
-        const reviewer = users.find(u => u.id === audit.reviewer_id);
-        if (reviewer) team.push({ name: reviewer.full_name, role: 'Reviewer' });
+        const u = users.find(u => u.id === audit.reviewer_id);
+        if (u) team.push({ name: u.full_name, role: 'Reviewer' });
+      }
+      if (audit?.auditor_id) {
+        const u = users.find(u => u.id === audit.auditor_id);
+        if (u) team.push({ name: u.full_name, role: 'Auditor' });
+      }
+      if (audit?.it_auditor_id) {
+        const u = users.find(u => u.id === audit.it_auditor_id);
+        if (u) team.push({ name: u.full_name, role: 'IT Auditor' });
       }
       const hia = users.find(u => u.role === 'HIA');
-      if (hia) team.push({ name: hia.full_name, role: 'Head of Internal Audit' });
+      if (hia && !team.find(t => t.name === hia.full_name)) {
+        team.push({ name: hia.full_name, role: 'Head of Internal Audit' });
+      }
 
-      // Call the TOR generation endpoint via the Anthropic API
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: `Return ONLY a JSON object (no markdown, no explanation) with this structure:
-{
-  "title": "${audit?.title || 'Audit'}",
-  "objectives": "${(data.objectives || '').replace(/"/g, '\\"')}",
-  "scope": "${(data.scope || '').replace(/"/g, '\\"')}",
-  "out_of_scope": "${(data.out_of_scope || '').replace(/"/g, '\\"')}",
-  "methodology": "${(data.methodology || '').replace(/"/g, '\\"')}",
-  "reporting_lines": "${(data.reporting_lines || '').replace(/"/g, '\\"')}",
-  "key_contacts": "${(data.key_contacts || '').replace(/"/g, '\\"')}",
-  "team": ${JSON.stringify(team)}
-}`
-          }]
-        })
-      });
-      const result = await response.json();
-      const torData = JSON.parse(result.content[0].text);
-      generateTORDocx(torData);
-    } catch (err) {
-      console.error('TOR export error:', err);
-      // Fallback: generate directly from state
-      generateTORDocx({
-        title: audit?.title || 'Audit',
-        ...data,
-        team: [],
-      });
-    } finally {
-      setExporting(false);
-    }
-  }
+      // Build risks list from RACM
+      const racmRisks = auditData?.racmRisks || auditData?.racm_risks || [];
+      const riskItems = racmRisks.map(r => r.risk_description).filter(Boolean);
 
-  function generateTORDocx(torData) {
-    // Generate TOR as HTML for download (docx generation requires server-side Node.js)
-    // This creates a well-formatted HTML document that can be opened in Word
-    const html = `<!DOCTYPE html>
+      // Get month/year
+      const monthYear = audit?.planned_start
+        ? new Date(audit.planned_start).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+        : new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+      // Build out_of_scope lines
+      const outOfScopeLines = (data.out_of_scope || '')
+        .split('\n').filter(l => l.trim())
+        .map(l => `<p style="margin:0 0 4pt 0">${l.trim()}</p>`).join('') || '<p style="margin:0">None noted.</p>';
+
+      // Build scope lines
+      const scopeLines = (data.scope || '')
+        .split('\n').filter(l => l.trim())
+        .map(l => `<p style="margin:0 0 4pt 0">${l.trim()}</p>`).join('') || '';
+
+      // Word-compatible HTML matching template structure exactly
+      const html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
-  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; margin: 2.5cm; color: #000; }
-  .header-bar { background: #1A2B4A; color: #fff; padding: 16px 20px; margin-bottom: 24px; }
-  .header-bar h1 { font-size: 16pt; font-weight: bold; margin: 0 0 4px 0; color: #fff; }
-  .header-bar p { font-size: 10pt; margin: 0; color: rgba(255,255,255,0.7); }
-  .doc-title { font-size: 20pt; font-weight: bold; color: #1A2B4A; margin-bottom: 4px; }
-  .subtitle { font-size: 12pt; color: #666; margin-bottom: 24px; }
-  h2 { font-size: 13pt; font-weight: bold; color: #1A2B4A; border-bottom: 2px solid #00847F; padding-bottom: 4px; margin-top: 20px; margin-bottom: 10px; }
-  p { line-height: 1.6; margin-bottom: 10px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  th { background: #1A2B4A; color: #fff; padding: 8px 10px; text-align: left; font-size: 10pt; }
-  td { padding: 8px 10px; border-bottom: 1px solid #ddd; font-size: 10pt; }
-  .teal { color: #00847F; }
-  .footer { margin-top: 40px; border-top: 1px solid #ddd; padding-top: 12px; font-size: 9pt; color: #999; }
+  body { font-family: Calibri, sans-serif; font-size: 11pt; margin: 2cm 2.5cm; color: #000; line-height: 1.4; }
+  h1.doc-title { font-size: 20pt; font-weight: bold; color: #000; margin: 0 0 2pt 0; }
+  h2.doc-subtitle { font-size: 14pt; font-weight: normal; color: #000; margin: 0 0 2pt 0; }
+  .month-year { font-size: 11pt; color: #000; margin: 0 0 24pt 0; }
+  h2.section { font-size: 13pt; font-weight: bold; color: #000; margin: 18pt 0 6pt 0; border: none; }
+  p { margin: 0 0 8pt 0; font-size: 11pt; }
+  ul { margin: 0 0 8pt 0; padding-left: 18pt; }
+  li { margin-bottom: 3pt; font-size: 11pt; }
+  table { border-collapse: collapse; width: 100%; margin-top: 6pt; }
+  th { background: #000; color: #fff; padding: 5pt 8pt; text-align: left; font-size: 11pt; font-weight: bold; }
+  td { padding: 5pt 8pt; border: 1pt solid #000; font-size: 11pt; }
+  .italic { font-style: italic; color: #444; }
+  .signature-line { margin-top: 32pt; }
 </style>
 </head>
 <body>
-<div class="header-bar">
-  <h1>Ninety One | Internal Audit</h1>
-  <p>Confidential | Internal Use Only</p>
-</div>
 
-<div class="doc-title">Terms of Reference</div>
-<div class="subtitle">${torData.title}</div>
+<h1 class="doc-title">Terms of Reference</h1>
+<h2 class="doc-subtitle">${audit?.title || '[Audit Title]'}</h2>
+<p class="month-year">${monthYear}</p>
 
-<h2>Audit Objective</h2>
-<p>${(torData.objectives || '').replace(/\n/g, '<br>')}</p>
+<h2 class="section">Audit Objective</h2>
+<p>The objective of the audit is to evaluate the ${audit?.title || '[AUDIT TITLE]'} control environment and assess whether the risks identified are adequately controlled and are commensurate with Management's risk appetite.</p>
+${data.objectives ? `<p>${data.objectives.replace(/\n/g, '<br>')}</p>` : ''}
 
-<h2>Scope</h2>
-<p>${(torData.scope || '').replace(/\n/g, '<br>')}</p>
+<h2 class="section">Risks</h2>
+<p>The audit of ${audit?.title || '[AUDIT TITLE]'} will consider the following risks:</p>
+${riskItems.length > 0
+  ? `<ul>${riskItems.map(r => `<li>${r}</li>`).join('')}</ul>`
+  : '<ul><li>[Risk 1]</li><li>[Risk 2]</li></ul>'
+}
 
-<h2>Scope Exclusions</h2>
-<p>${(torData.out_of_scope || 'None noted.').replace(/\n/g, '<br>')}</p>
+<h2 class="section">Scope</h2>
+<p>The audit will include, but not necessarily be limited to, a review of the following key processes and will cover the period ${audit?.planned_start ? new Date(audit.planned_start).toLocaleDateString('en-GB') : '[dd/mm/yyyy]'} to ${audit?.planned_end ? new Date(audit.planned_end).toLocaleDateString('en-GB') : '[dd/mm/yyyy]'}:</p>
+${scopeLines}
+<p>As part of the review, Internal Audit will also consider Management's approach to risk management and internal control. This will include Management's actions in addressing known control deficiencies as well as Management's regular assessment of controls.</p>
+<p>Should a change in scope occur, during the performance of the review, this will be communicated by way of a "Scope change" e-mail, and a follow up call with the Head of the business area.</p>
 
-<h2>Methodology</h2>
-<p>${(torData.methodology || '').replace(/\n/g, '<br>')}</p>
+<h2 class="section">Legal Entities</h2>
+<p>The review impacts the following legal entities:</p>
+<ul>
+  <li>Ninety One Plc and subsidiaries</li>
+  <li>Ninety One Ltd and subsidiaries</li>
+</ul>
 
-<h2>Reporting Lines</h2>
-<p>${(torData.reporting_lines || '').replace(/\n/g, '<br>')}</p>
+<h2 class="section">Scope Exclusions</h2>
+<p>This audit will not include the following:</p>
+${outOfScopeLines}
 
-<h2>Key Contacts</h2>
-<p>${(torData.key_contacts || '').replace(/\n/g, '<br>')}</p>
-
-<h2>Resources</h2>
+<h2 class="section">Resources</h2>
+<p>The following staff will be involved in the review:</p>
 <table>
-  <tr><th>Staff Member</th><th>Role</th></tr>
-  ${(torData.team || []).map(m => `<tr><td>${m.name}</td><td>${m.role}</td></tr>`).join('')}
+  <tr><th>Staff member</th><th>Role</th></tr>
+  ${team.map(m => `<tr><td>${m.name}</td><td>${m.role}</td></tr>`).join('')}
+  ${team.length === 0 ? '<tr><td>&nbsp;</td><td>&nbsp;</td></tr>' : ''}
 </table>
 
-<div class="footer">
-  Internal Audit | Ninety One | Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+<div class="signature-line">
+<p>Kind regards</p>
+<p><strong>${team.find(t => t.role === 'Audit Lead')?.name || '[Name]'}</strong></p>
 </div>
+
 </body>
 </html>`;
 
-    const blob = new Blob([html], { type: 'application/msword' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const safeName = (audit?.title || 'TOR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
-    a.href     = url;
-    a.download = `TOR_${safeName}.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const blob = new Blob([html], { type: 'application/msword' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const safeName = (audit?.title || 'TOR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
+      a.href     = url;
+      a.download = `TOR_${safeName}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('TOR export error:', err);
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
