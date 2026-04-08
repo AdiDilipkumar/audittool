@@ -69,13 +69,14 @@ export default function PlanningTab({
   openCommentCount,
   progressData = { planning: 0, fieldwork: 0, reporting: 0 },
   onTabChange,
+  initialSubTab,
   audit, auditData, onUpdateAuditData,
   reviewComments = [],
   currentUser, users = [],
   openDrawer,
   signOffs = [], onSignOff, onRevokeSignOff,
 }) {
-  const [activeSection, setActiveSection] = useState('details');
+  const [activeSection, setActiveSection] = useState(initialSubTab || 'details');
   const topRef = useRef(null);
 
   const signOff = signOffs.find(s => s.tab === 'Planning') || null;
@@ -98,6 +99,11 @@ export default function PlanningTab({
   ];
 
   const subProps = { audit, auditData, onUpdateAuditData, reviewComments, currentUser, users, openDrawer };
+  // Bug 1 fix: force remount of each planning sub-component once auditData arrives from Supabase.
+  // If the component mounts while auditData is still null (async not yet complete), useState
+  // initialises blank and never re-inits. Changing the key causes React to unmount+remount,
+  // running useState fresh with the real data.
+  const dataKey = auditData ? (audit?.id ?? 'loaded') : 'loading';
 
   return (
     <div ref={topRef} style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -135,11 +141,11 @@ export default function PlanningTab({
 
       {/* Section content */}
       {activeSection === 'details'   && <PlanningAuditDetails   {...subProps} />}
-      {activeSection === 'risk'      && <PlanningInherentRisk   {...subProps} />}
-      {activeSection === 'assurance' && <PlanningCombinedAssurance {...subProps} />}
-      {activeSection === 'scope'     && <PlanningScope          {...subProps} />}
-      {activeSection === 'tor'       && <PlanningToR            {...subProps} />}
-      {activeSection === 'racm'      && <PlanningRACM           {...subProps} onTabChange={onTabChange} />}
+      {activeSection === 'risk'      && <PlanningInherentRisk   key={dataKey} {...subProps} />}
+      {activeSection === 'assurance' && <PlanningCombinedAssurance key={dataKey} {...subProps} />}
+      {activeSection === 'scope'     && <PlanningScope          key={dataKey} {...subProps} />}
+      {activeSection === 'tor'       && <PlanningToR            key={dataKey} {...subProps} />}
+      {activeSection === 'racm'      && <PlanningRACM           key={dataKey} {...subProps} onTabChange={onTabChange} />}
 
       {activeSection === 'signoff' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

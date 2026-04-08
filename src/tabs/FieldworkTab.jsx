@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Card, SectionHeader, Badge, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
 
 // ── Working Papers ────────────────────────────────────────────────────────────
-function WorkingPapers({ papers = [], users = [], currentUser, onCreateWorkingPaper, onUpdateWorkingPaper, signOff, onSignOff }) {
+function WorkingPapers({ papers = [], users = [], currentUser, onCreateWorkingPaper, onUpdateWorkingPaper, onTabChange, signOff, onSignOff }) {
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle]         = useState('');
   const [url, setUrl]             = useState('');
+  // Bug 2: track which title is being edited inline — { id, value } or null
+  const [editingTitle, setEditingTitle] = useState(null);
 
   function handleSave() {
     if (!title.trim()) return;
@@ -13,6 +15,16 @@ function WorkingPapers({ papers = [], users = [], currentUser, onCreateWorkingPa
     setTitle('');
     setUrl('');
     setShowModal(false);
+  }
+
+  // Bug 2: commit inline title edit on blur or Enter
+  function commitTitleEdit() {
+    if (!editingTitle) return;
+    const trimmed = editingTitle.value.trim();
+    if (trimmed && trimmed !== papers.find(p => p.id === editingTitle.id)?.title) {
+      onUpdateWorkingPaper(editingTitle.id, { title: trimmed });
+    }
+    setEditingTitle(null);
   }
 
   function getUserName(id) {
@@ -25,7 +37,16 @@ function WorkingPapers({ papers = [], users = [], currentUser, onCreateWorkingPa
         <SectionHeader
           title="Working Papers"
           subtitle={`${papers.length} paper${papers.length !== 1 ? 's' : ''} - ${papers.filter(p => p.status === 'Final').length} final`}
-          action={<Button variant="secondary" size="sm" onClick={() => setShowModal(true)}>+ Add Paper</Button>}
+          action={
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {onTabChange && (
+                <Button variant="ghost" size="sm" onClick={() => onTabChange('planning', 'racm')}>
+                  &#8592; Back to RACM
+                </Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => setShowModal(true)}>+ Add Paper</Button>
+            </div>
+          }
         />
 
         {papers.length === 0 ? (
@@ -44,7 +65,28 @@ function WorkingPapers({ papers = [], users = [], currentUser, onCreateWorkingPa
             <tbody>
               {papers.map((wp, i) => (
                 <tr key={wp.id} style={{ borderBottom: i < papers.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  <td style={{ padding: '10px 10px', fontWeight: 500 }}>{wp.title}</td>
+                  <td style={{ padding: '10px 10px', fontWeight: 500 }}>
+                    {editingTitle?.id === wp.id ? (
+                      <input
+                        autoFocus
+                        value={editingTitle.value}
+                        onChange={e => setEditingTitle({ id: wp.id, value: e.target.value })}
+                        onBlur={commitTitleEdit}
+                        onKeyDown={e => { if (e.key === 'Enter') commitTitleEdit(); if (e.key === 'Escape') setEditingTitle(null); }}
+                        style={{ width: '100%', fontSize: 13, fontWeight: 500, padding: '2px 6px', border: '1px solid var(--ni-teal)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-0)', fontFamily: 'var(--font-sans)', outline: 'none' }}
+                      />
+                    ) : (
+                      <span
+                        onClick={() => setEditingTitle({ id: wp.id, value: wp.title })}
+                        title="Click to edit title"
+                        style={{ cursor: 'text', display: 'block', minHeight: 20, borderRadius: 'var(--radius-sm)', padding: '2px 4px', transition: 'background 0.1s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-1)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        {wp.title}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '10px 10px', color: 'var(--text-secondary)' }}>{getUserName(wp.created_by)}</td>
                   <td style={{ padding: '10px 10px' }}>
                     <select
@@ -245,6 +287,7 @@ export default function FieldworkTab({
   onSignOff, signOffs = [],
   openCommentCount,
   onPromoteToIssue,
+  onTabChange,
 }) {
   const [activeSection, setActiveSection] = useState('papers');
 
@@ -285,6 +328,7 @@ export default function FieldworkTab({
           papers={papers} users={users} currentUser={currentUser}
           onCreateWorkingPaper={onCreateWorkingPaper}
           onUpdateWorkingPaper={onUpdateWorkingPaper}
+          onTabChange={onTabChange}
         />
       )}
 
