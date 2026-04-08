@@ -15,7 +15,7 @@ import {
   createQuery, updateQuery,
   createIssue, updateIssue,
   createWorkingPaper, updateWorkingPaper,
-  upsertAuditMetadata,
+  upsertAuditMetadata, updateAuditField,
   subscribeToAudits, subscribeToIssues, subscribeToQueries,
   subscribeToComments, subscribeToSignOffs, subscribeToWorkingPapers,
   unsubscribeAll,
@@ -230,6 +230,14 @@ export default function App() {
     } catch (err) { console.error('Delete audit error:', err); }
   }
 
+  async function handleUpdateAudit(auditId, field, value) {
+    try {
+      await updateAuditField(auditId, field, value);
+      // Update local audits state so header title and other derived values reflect change immediately
+      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, [field]: value } : a));
+    } catch (err) { console.error('Update audit field error:', err); }
+  }
+
   // ── Audit metadata (planning tab) ──────────────────────────────────────────
   async function handleUpdateAuditData(auditId, key, value) {
     try {
@@ -365,6 +373,7 @@ export default function App() {
     currentUser,
     users,
     onUpdateAuditData: (key, value) => handleUpdateAuditData(selectedAuditId, key, value),
+    onUpdateAudit:     (field, value) => handleUpdateAudit(selectedAuditId, field, value),
     onCreateQuery:     handleCreateQuery,
     onUpdateQuery:     handleUpdateQuery,
     onCreateIssue:     handleCreateIssue,
