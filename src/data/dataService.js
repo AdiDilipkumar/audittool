@@ -232,6 +232,8 @@ export async function createQuery(query) {
     raised_by:   query.raised_by,
     raised_date: new Date().toISOString().slice(0, 10),
     directed_to: query.directed_to || '',
+    control_ref: query.control_ref || null,
+    phase:       query.phase || 'Fieldwork',
     response:    '', status: 'Open',
     resolved_rationale: null, promoted_to_issue_id: null,
   };
