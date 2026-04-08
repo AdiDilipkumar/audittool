@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge, CommentDrawer } from './components/UI';
 import ProfileSelector from './components/ProfileSelector';
 import PlanningTab from './tabs/PlanningTab';
@@ -7,37 +7,20 @@ import ReportingTab from './tabs/ReportingTab';
 import ReviewCommentsTab from './tabs/ReviewCommentsTab';
 import PortfolioTab from './tabs/PortfolioTab';
 import {
-  fetchUsers,
-  fetchAudits,
-  fetchSignOffs,
-  fetchReviewComments,
-  fetchIssues,
-  fetchQueries,
-  fetchWorkingPapers,
-  fetchAuditMetadata,
-  createAuditRecord,
-  deleteAuditRecord,
-  addReviewComment,
-  respondToComment,
-  closeComment,
-  signOffPhase,
-  createQuery,
-  updateQuery,
-  createIssue,
-  updateIssue,
-  createWorkingPaper,
-  updateWorkingPaper,
+  fetchUsers, fetchAudits, fetchSignOffs, fetchReviewComments,
+  fetchIssues, fetchQueries, fetchWorkingPapers, fetchAuditMetadata,
+  createAuditRecord, deleteAuditRecord,
+  addReviewComment, respondToComment, closeComment,
+  signOffPhase, revokeSignOff,
+  createQuery, updateQuery,
+  createIssue, updateIssue,
+  createWorkingPaper, updateWorkingPaper,
   upsertAuditMetadata,
-  subscribeToAudits,
-  subscribeToIssues,
-  subscribeToQueries,
-  subscribeToComments,
-  subscribeToSignOffs,
-  subscribeToWorkingPapers,
+  subscribeToAudits, subscribeToIssues, subscribeToQueries,
+  subscribeToComments, subscribeToSignOffs, subscribeToWorkingPapers,
   unsubscribeAll,
 } from './data/dataService';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
 const PROFILE_KEY = 'ni_audit_tool_user_id';
 
 const ENGAGEMENT_TABS = [
@@ -68,76 +51,55 @@ function computeProgress(signOffs) {
   return result;
 }
 
-// ── Loading screen ────────────────────────────────────────────────────────────
 function LoadingScreen() {
   return (
-    <div style={{
-      height: '100vh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      background: 'var(--surface-0)', gap: 16,
-    }}>
-      <div style={{
-        width: 40, height: 40, borderRadius: 10,
-        background: 'var(--ni-teal)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 18, fontWeight: 700, color: '#fff',
-      }}>91</div>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-0)', gap: 16 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--ni-teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff' }}>91</div>
       <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading audit data...</p>
     </div>
   );
 }
 
-// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  // ── Bootstrap state ───────────────────────────────────────────────────────
-  const [loading, setLoading]           = useState(true);
-  const [users, setUsers]               = useState([]);
-  const [currentUser, setCurrentUser]   = useState(null);
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  const [loading, setLoading]         = useState(true);
+  const [users, setUsers]             = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // ── Core data state ───────────────────────────────────────────────────────
-  const [audits, setAudits]             = useState([]);
-  const [signOffs, setSignOffs]         = useState([]);
+  // ── Global data ────────────────────────────────────────────────────────────
+  const [audits, setAudits]               = useState([]);
+  const [signOffs, setSignOffs]           = useState([]);
   const [reviewComments, setReviewComments] = useState([]);
 
-  // Per-engagement data (loaded on audit open)
+  // ── Per-engagement data ────────────────────────────────────────────────────
   const [engagementData, setEngagementData] = useState(null);
-  // { auditId, issues, queries, workingPapers, metadata }
 
-  // ── Navigation state ──────────────────────────────────────────────────────
-  const [selectedAuditId, setSelectedAuditId]       = useState(null);
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  const [selectedAuditId, setSelectedAuditId]         = useState(null);
   const [activeEngagementTab, setActiveEngagementTab] = useState('planning');
 
-  // ── Comment drawer state ──────────────────────────────────────────────────
-  const [drawerState, setDrawerState] = useState({
-    open: false, sectionRef: null, rowRef: null, title: '', contextLabel: '',
-  });
-
-  const openDrawer = ({ sectionRef, rowRef, title, contextLabel }) =>
-    setDrawerState({ open: true, sectionRef, rowRef, title, contextLabel });
+  // ── Comment drawer ─────────────────────────────────────────────────────────
+  const [drawerState, setDrawerState] = useState({ open: false, sectionRef: null, rowRef: null, title: '', contextLabel: '' });
+  const openDrawer  = ({ sectionRef, rowRef, title, contextLabel }) => setDrawerState({ open: true, sectionRef, rowRef, title, contextLabel });
   const closeDrawer = () => setDrawerState(s => ({ ...s, open: false }));
 
-  // ── Realtime channel refs ─────────────────────────────────────────────────
+  // ── Realtime channels ──────────────────────────────────────────────────────
   const [channels, setChannels] = useState([]);
 
-  // ── Bootstrap: load users + global data ──────────────────────────────────
+  // ── Bootstrap: load users + global data ───────────────────────────────────
   useEffect(() => {
     async function bootstrap() {
       try {
         const [usersData, auditsData, signOffsData, commentsData] = await Promise.all([
-          fetchUsers(),
-          fetchAudits(),
-          fetchSignOffs(),
-          fetchReviewComments('all'),
+          fetchUsers(), fetchAudits(), fetchSignOffs(), fetchReviewComments('all'),
         ]);
         setUsers(usersData);
         setAudits(auditsData);
         setSignOffs(signOffsData);
         setReviewComments(commentsData);
-
-        // Restore saved user profile
-        const savedUserId = localStorage.getItem(PROFILE_KEY);
-        if (savedUserId) {
-          const found = usersData.find(u => u.id === savedUserId);
+        const savedId = localStorage.getItem(PROFILE_KEY);
+        if (savedId) {
+          const found = usersData.find(u => u.id === savedId);
           if (found) setCurrentUser(found);
         }
       } catch (err) {
@@ -149,7 +111,7 @@ export default function App() {
     bootstrap();
   }, []);
 
-  // ── Global realtime subscriptions ─────────────────────────────────────────
+  // ── Global realtime ────────────────────────────────────────────────────────
   useEffect(() => {
     const auditSub = subscribeToAudits(async () => {
       const fresh = await fetchAudits();
@@ -162,7 +124,7 @@ export default function App() {
     return () => unsubscribeAll([auditSub, signOffSub]);
   }, []);
 
-  // ── Per-engagement data load + realtime ───────────────────────────────────
+  // ── Per-engagement data load + realtime ────────────────────────────────────
   useEffect(() => {
     if (!selectedAuditId) {
       setEngagementData(null);
@@ -192,7 +154,6 @@ export default function App() {
 
     loadEngagement();
 
-    // Wire per-engagement realtime
     const issueSub   = subscribeToIssues(selectedAuditId, async () => {
       const fresh = await fetchIssues(selectedAuditId);
       setEngagementData(prev => prev ? { ...prev, issues: fresh } : prev);
@@ -218,168 +179,124 @@ export default function App() {
     return () => unsubscribeAll(newChannels);
   }, [selectedAuditId]);
 
-  // ── Profile selection ─────────────────────────────────────────────────────
+  // ── Profile ────────────────────────────────────────────────────────────────
   function handleSelectProfile(user) {
     localStorage.setItem(PROFILE_KEY, user.id);
     setCurrentUser(user);
   }
-
   function handleSwitchUser() {
     localStorage.removeItem(PROFILE_KEY);
     setCurrentUser(null);
     setSelectedAuditId(null);
   }
 
-  // ── Navigation handlers ───────────────────────────────────────────────────
+  // ── Navigation ─────────────────────────────────────────────────────────────
   function handleSelectAudit(auditId) {
     setSelectedAuditId(auditId);
     setActiveEngagementTab('planning');
     closeDrawer();
   }
-
   function handleBackToPortfolio() {
     setSelectedAuditId(null);
     closeDrawer();
   }
 
-  // ── Audit CRUD ────────────────────────────────────────────────────────────
+  // ── Audit CRUD ─────────────────────────────────────────────────────────────
   async function handleCreateAudit(fields) {
     try {
       const newId = await createAuditRecord(fields);
-      const fresh = await fetchAudits();
+      const [fresh, freshSOs] = await Promise.all([fetchAudits(), fetchSignOffs()]);
       setAudits(fresh);
-      const freshSOs = await fetchSignOffs();
       setSignOffs(freshSOs);
       setSelectedAuditId(newId);
       setActiveEngagementTab('planning');
-    } catch (err) {
-      console.error('Create audit error:', err);
-    }
+    } catch (err) { console.error('Create audit error:', err); }
   }
-
   async function handleDeleteAudit(auditId) {
     try {
       await deleteAuditRecord(auditId);
       setAudits(prev => prev.filter(a => a.id !== auditId));
       if (selectedAuditId === auditId) setSelectedAuditId(null);
-    } catch (err) {
-      console.error('Delete audit error:', err);
-    }
+    } catch (err) { console.error('Delete audit error:', err); }
   }
 
-  // ── Audit data updates (planning tab) ─────────────────────────────────────
+  // ── Audit metadata (planning tab) ──────────────────────────────────────────
   async function handleUpdateAuditData(auditId, key, value) {
     try {
-      // Map UI key to DB column
+      await upsertAuditMetadata(auditId, key, value);
+      // Map UI key to DB key for local state update
       const dbKey = {
-        tor:               'tor',
-        inherentRisk:      'inherent_risk',
-        combinedAssurance: 'combined_assurance',
-        scopeItems:        'scope_items',
-        programme:         'programme',
-        racmRisks:         'racm_risks',
-        budget:            'budget',
-        timeline:          'timeline',
+        tor: 'tor', inherentRisk: 'inherent_risk',
+        combinedAssurance: 'combined_assurance', scopeItems: 'scope_items',
+        racmRisks: 'racm_risks', budget: 'budget', timeline: 'timeline',
       }[key] || key;
-
-      await upsertAuditMetadata(auditId, dbKey, value);
-      setEngagementData(prev => prev ? { ...prev, metadata: { ...prev.metadata, [dbKey]: value } } : prev);
-    } catch (err) {
-      console.error('Update audit data error:', err);
-    }
+      setEngagementData(prev => prev ? {
+        ...prev,
+        metadata: { ...prev.metadata, [dbKey]: value, [key]: value },
+      } : prev);
+    } catch (err) { console.error('Update audit data error:', err); }
   }
 
-  // ── Queries ───────────────────────────────────────────────────────────────
+  // ── Queries ────────────────────────────────────────────────────────────────
   async function handleCreateQuery(queryData) {
-    try {
-      await createQuery({ ...queryData, raised_by: currentUser.id });
-    } catch (err) {
-      console.error('Create query error:', err);
-    }
+    try { await createQuery({ ...queryData, raised_by: currentUser.id }); }
+    catch (err) { console.error('Create query error:', err); }
   }
-
   async function handleUpdateQuery(queryId, updates) {
-    try {
-      await updateQuery(queryId, updates);
-    } catch (err) {
-      console.error('Update query error:', err);
-    }
+    try { await updateQuery(queryId, updates); }
+    catch (err) { console.error('Update query error:', err); }
   }
 
-  // ── Issues ────────────────────────────────────────────────────────────────
+  // ── Issues ─────────────────────────────────────────────────────────────────
   async function handleCreateIssue(issueData) {
-    try {
-      await createIssue({ ...issueData, audit_id: selectedAuditId });
-    } catch (err) {
-      console.error('Create issue error:', err);
-    }
+    try { await createIssue({ ...issueData, audit_id: selectedAuditId }); }
+    catch (err) { console.error('Create issue error:', err); }
   }
-
   async function handleUpdateIssue(issueId, updates) {
-    try {
-      await updateIssue(issueId, updates);
-    } catch (err) {
-      console.error('Update issue error:', err);
-    }
+    try { await updateIssue(issueId, updates); }
+    catch (err) { console.error('Update issue error:', err); }
   }
 
-  // ── Working papers ────────────────────────────────────────────────────────
+  // ── Working papers ─────────────────────────────────────────────────────────
   async function handleCreateWorkingPaper(paperData) {
-    try {
-      await createWorkingPaper({ ...paperData, audit_id: selectedAuditId, created_by: currentUser.id });
-    } catch (err) {
-      console.error('Create working paper error:', err);
-    }
+    try { await createWorkingPaper({ ...paperData, audit_id: selectedAuditId, created_by: currentUser.id }); }
+    catch (err) { console.error('Create working paper error:', err); }
   }
-
   async function handleUpdateWorkingPaper(paperId, updates) {
-    try {
-      await updateWorkingPaper(paperId, updates);
-    } catch (err) {
-      console.error('Update working paper error:', err);
-    }
+    try { await updateWorkingPaper(paperId, updates); }
+    catch (err) { console.error('Update working paper error:', err); }
   }
 
-  // ── Sign offs ─────────────────────────────────────────────────────────────
+  // ── Sign offs ──────────────────────────────────────────────────────────────
   async function handleSignOff(signOffId, role) {
-    try {
-      await signOffPhase(signOffId, role, currentUser.id);
-    } catch (err) {
-      console.error('Sign off error:', err);
-    }
+    try { await signOffPhase(signOffId, role, currentUser.id); }
+    catch (err) { console.error('Sign off error:', err); }
+  }
+  async function handleRevokeSignOff(signOffId, role) {
+    try { await revokeSignOff(signOffId, role, currentUser.id); }
+    catch (err) { console.error('Revoke sign off error:', err); }
   }
 
-  // ── Review comments ───────────────────────────────────────────────────────
+  // ── Review comments ────────────────────────────────────────────────────────
   const auditComments = selectedAuditId
     ? reviewComments.filter(c => c.audit_id === selectedAuditId)
     : [];
 
   async function handleAddComment(comment) {
-    try {
-      await addReviewComment({ ...comment, raised_by: currentUser.id, audit_id: selectedAuditId });
-    } catch (err) {
-      console.error('Add comment error:', err);
-    }
+    try { await addReviewComment({ ...comment, raised_by: currentUser.id, audit_id: selectedAuditId }); }
+    catch (err) { console.error('Add comment error:', err); }
   }
-
   async function handleRespondToComment(commentId, responseText) {
-    try {
-      await respondToComment(commentId, responseText, currentUser.id);
-    } catch (err) {
-      console.error('Respond to comment error:', err);
-    }
+    try { await respondToComment(commentId, responseText, currentUser.id); }
+    catch (err) { console.error('Respond to comment error:', err); }
   }
-
   async function handleCloseComment(commentId) {
-    try {
-      await closeComment(commentId, currentUser.id);
-    } catch (err) {
-      console.error('Close comment error:', err);
-    }
+    try { await closeComment(commentId, currentUser.id); }
+    catch (err) { console.error('Close comment error:', err); }
   }
 
-  // ── Derived values ────────────────────────────────────────────────────────
-  const progressData = computeProgress(signOffs);
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const progressData  = computeProgress(signOffs);
   const inEngagement  = selectedAuditId !== null;
   const selectedAudit = inEngagement ? (audits.find(a => a.id === selectedAuditId) || null) : null;
 
@@ -388,140 +305,95 @@ export default function App() {
   const openReportingComments = inEngagement ? getOpenCommentCount(reviewComments, 'Reporting', selectedAuditId) : 0;
   const totalOpenComments     = inEngagement ? auditComments.filter(c => c.status === 'Open').length : 0;
 
-  // Build auditData shape that tabs expect (maps from DB shape back to UI shape)
+  // Build auditData shape from DB metadata (maps snake_case back to camelCase for tabs)
   const auditData = engagementData ? {
     audit:             selectedAudit,
-    budget:            engagementData.metadata?.budget || {},
-    timeline:          engagementData.metadata?.timeline || [],
-    inherentRisk:      engagementData.metadata?.inherent_risk || {},
-    combinedAssurance: engagementData.metadata?.combined_assurance || {},
-    scopeItems:        engagementData.metadata?.scope_items || {},
-    tor:               engagementData.metadata?.tor || {},
-    programme:         engagementData.metadata?.programme || [],
-    racmRisks:         engagementData.metadata?.racm_risks || [],
-    queries:           engagementData.queries || [],
-    issues:            engagementData.issues || [],
+    budget:            engagementData.metadata?.budget            || {},
+    timeline:          engagementData.metadata?.timeline          || [],
+    inherentRisk:      engagementData.metadata?.inherent_risk     || engagementData.metadata?.inherentRisk     || {},
+    combinedAssurance: engagementData.metadata?.combined_assurance|| engagementData.metadata?.combinedAssurance || {},
+    scopeItems:        engagementData.metadata?.scope_items       || engagementData.metadata?.scopeItems       || {},
+    tor:               engagementData.metadata?.tor               || {},
+    racmRisks:         engagementData.metadata?.racm_risks        || engagementData.metadata?.racmRisks        || [],
+    queries:           engagementData.queries       || [],
+    issues:            engagementData.issues        || [],
     workingPapers:     engagementData.workingPapers || [],
   } : null;
 
-  // ── Props bundle ──────────────────────────────────────────────────────────
+  // Props bundle for all engagement tabs
   const engagementProps = {
-    audit:            selectedAudit,
+    audit: selectedAudit,
     auditData,
     currentUser,
     users,
     onUpdateAuditData: (key, value) => handleUpdateAuditData(selectedAuditId, key, value),
-    onCreateQuery:    handleCreateQuery,
-    onUpdateQuery:    handleUpdateQuery,
-    onCreateIssue:    handleCreateIssue,
-    onUpdateIssue:    handleUpdateIssue,
+    onCreateQuery:     handleCreateQuery,
+    onUpdateQuery:     handleUpdateQuery,
+    onCreateIssue:     handleCreateIssue,
+    onUpdateIssue:     handleUpdateIssue,
     onCreateWorkingPaper:  handleCreateWorkingPaper,
     onUpdateWorkingPaper:  handleUpdateWorkingPaper,
-    onSignOff:        handleSignOff,
-    signOffs:         signOffs.filter(so => so.audit_id === selectedAuditId),
-    reviewComments:   auditComments,
-    onAddComment:     handleAddComment,
+    onSignOff:         handleSignOff,
+    onRevokeSignOff:   handleRevokeSignOff,
+    signOffs:          signOffs.filter(so => so.audit_id === selectedAuditId),
+    reviewComments:    auditComments,
+    onAddComment:      handleAddComment,
     onRespondToComment: handleRespondToComment,
-    onCloseComment:   handleCloseComment,
+    onCloseComment:    handleCloseComment,
     openDrawer,
   };
 
-  // ── Render gates ──────────────────────────────────────────────────────────
-  if (loading) return <LoadingScreen />;
+  // ── Render gates ───────────────────────────────────────────────────────────
+  if (loading)      return <LoadingScreen />;
   if (!currentUser) return <ProfileSelector users={users} onSelectProfile={handleSelectProfile} />;
 
-  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--surface-0)' }}>
 
-      {/* ── Top bar ────────────────────────────────────────────────────────── */}
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <header style={{
-        background: 'var(--ni-navy)',
-        borderBottom: '1px solid var(--ni-navy-light)',
-        padding: '0 24px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'var(--ni-navy)', borderBottom: '1px solid var(--ni-navy-light)',
+        padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         height: 52, flexShrink: 0, position: 'relative', zIndex: 200,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 6,
-              background: 'var(--ni-teal)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700, color: '#fff',
-            }}>91</div>
-            <span style={{ color: '#fff', fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em' }}>
-              Internal Audit
-            </span>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--ni-teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff' }}>91</div>
+            <span style={{ color: '#fff', fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em' }}>Internal Audit</span>
           </div>
-
           {inEngagement && (
             <>
               <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.15)' }} />
-              <button
-                onClick={handleBackToPortfolio}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '4px 10px 4px 6px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: 'rgba(255,255,255,0.85)',
-                  fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                }}
-              >
-                <span style={{ fontSize: 14 }}>&#8592;</span>
-                Portfolio
+              <button onClick={handleBackToPortfolio} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px 4px 6px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                <span style={{ fontSize: 14 }}>&#8592;</span>Portfolio
               </button>
               <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.15)' }} />
-              <span style={{
-                color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500,
-                maxWidth: 440, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
+              <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500, maxWidth: 440, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {selectedAudit?.title || ''}
               </span>
             </>
           )}
         </div>
 
-        {/* Right side: user info + switch */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#fff' }}>{currentUser.full_name}</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
               {currentUser.role}
-              {' · '}
-              <button
-                onClick={handleSwitchUser}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'rgba(0,167,157,0.9)', fontSize: 11, padding: 0,
-                  textDecoration: 'underline',
-                }}
-              >
+              {' - '}
+              <button onClick={handleSwitchUser} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(0,167,157,0.9)', fontSize: 11, padding: 0, textDecoration: 'underline' }}>
                 Switch
               </button>
             </div>
           </div>
-          <div style={{
-            width: 30, height: 30, borderRadius: '50%',
-            background: 'var(--ni-teal)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 600, color: '#fff',
-          }}>
+          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--ni-teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#fff' }}>
             {currentUser.full_name.split(' ').map(n => n[0]).join('')}
           </div>
         </div>
       </header>
 
-      {/* ── Tab navigation ─────────────────────────────────────────────────── */}
-      <nav style={{
-        background: 'var(--surface-1)',
-        borderBottom: '1px solid var(--border)',
-        padding: '0 24px',
-        display: 'flex', alignItems: 'stretch',
-        flexShrink: 0, height: 44, position: 'relative', zIndex: 200,
-      }}>
+      {/* ── Tab navigation ──────────────────────────────────────────────────── */}
+      <nav style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border)', padding: '0 24px', display: 'flex', alignItems: 'stretch', flexShrink: 0, height: 44, position: 'relative', zIndex: 200 }}>
         {inEngagement ? (
           <>
             {ENGAGEMENT_TABS.map(tab => {
@@ -532,27 +404,19 @@ export default function App() {
                 :                         openReportingComments;
               const isActive = activeEngagementTab === tab.id;
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveEngagementTab(tab.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '0 16px', fontSize: 13,
-                    fontWeight: isActive ? 600 : 400,
-                    color: isActive ? 'var(--ni-teal)' : 'var(--text-secondary)',
-                    borderBottom: `2px solid ${isActive ? 'var(--ni-teal)' : 'transparent'}`,
-                    borderTop: 'none', borderLeft: 'none', borderRight: 'none',
-                    background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
+                <button key={tab.id} onClick={() => setActiveEngagementTab(tab.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px', fontSize: 13,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? 'var(--ni-teal)' : 'var(--text-secondary)',
+                  borderBottom: `2px solid ${isActive ? 'var(--ni-teal)' : 'transparent'}`,
+                  borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                  background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>
                   {tab.label}
                   {count > 0 && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 18, height: 18, borderRadius: '50%',
-                      background: 'var(--status-amber)', color: '#fff',
-                      fontSize: 10, fontWeight: 700,
-                    }}>{count}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '50%', background: 'var(--status-amber)', color: '#fff', fontSize: 10, fontWeight: 700 }}>
+                      {count}
+                    </span>
                   )}
                 </button>
               );
@@ -562,32 +426,20 @@ export default function App() {
             </div>
           </>
         ) : (
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '0 16px', fontSize: 13, fontWeight: 600,
-            color: 'var(--ni-teal)',
-            borderBottom: '2px solid var(--ni-teal)',
-            borderTop: 'none', borderLeft: 'none', borderRight: 'none',
-            background: 'none', cursor: 'default', whiteSpace: 'nowrap',
-          }}>
+          <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px', fontSize: 13, fontWeight: 600, color: 'var(--ni-teal)', borderBottom: '2px solid var(--ni-teal)', borderTop: 'none', borderLeft: 'none', borderRight: 'none', background: 'none', cursor: 'default', whiteSpace: 'nowrap' }}>
             Portfolio
           </button>
         )}
       </nav>
 
-      {/* ── Main content ───────────────────────────────────────────────────── */}
+      {/* ── Main content ────────────────────────────────────────────────────── */}
       <main style={{ flex: 1, overflow: 'auto', padding: 24, position: 'relative' }}>
         {!inEngagement && (
           <PortfolioTab
-            audits={audits}
-            signOffs={signOffs}
-            reviewComments={reviewComments}
-            onSelectAudit={handleSelectAudit}
-            onCreateAudit={handleCreateAudit}
-            onDeleteAudit={handleDeleteAudit}
-            progressData={progressData}
-            currentUser={currentUser}
-            users={users}
+            audits={audits} signOffs={signOffs} reviewComments={reviewComments}
+            onSelectAudit={handleSelectAudit} onCreateAudit={handleCreateAudit}
+            onDeleteAudit={handleDeleteAudit} progressData={progressData}
+            currentUser={currentUser} users={users}
           />
         )}
         {inEngagement && activeEngagementTab === 'planning' && (
@@ -599,16 +451,10 @@ export default function App() {
           />
         )}
         {inEngagement && activeEngagementTab === 'fieldwork' && (
-          <FieldworkTab
-            {...engagementProps}
-            openCommentCount={openFieldworkComments}
-          />
+          <FieldworkTab {...engagementProps} openCommentCount={openFieldworkComments} />
         )}
         {inEngagement && activeEngagementTab === 'reporting' && (
-          <ReportingTab
-            {...engagementProps}
-            openCommentCount={openReportingComments}
-          />
+          <ReportingTab {...engagementProps} openCommentCount={openReportingComments} />
         )}
         {inEngagement && activeEngagementTab === 'review' && (
           <ReviewCommentsTab
@@ -616,29 +462,22 @@ export default function App() {
             onAddComment={handleAddComment}
             onRespondToComment={handleRespondToComment}
             onCloseComment={handleCloseComment}
-            currentUser={currentUser}
-            users={users}
-            auditId={selectedAuditId}
+            currentUser={currentUser} users={users} auditId={selectedAuditId}
           />
         )}
       </main>
 
-      {/* ── Comment Drawer ─────────────────────────────────────────────────── */}
+      {/* ── Comment Drawer ───────────────────────────────────────────────────── */}
       {inEngagement && (
         <CommentDrawer
-          isOpen={drawerState.open}
-          onClose={closeDrawer}
-          title={drawerState.title}
-          contextLabel={drawerState.contextLabel}
-          sectionRef={drawerState.sectionRef}
-          rowRef={drawerState.rowRef}
-          auditId={selectedAuditId}
-          comments={auditComments}
+          isOpen={drawerState.open} onClose={closeDrawer}
+          title={drawerState.title} contextLabel={drawerState.contextLabel}
+          sectionRef={drawerState.sectionRef} rowRef={drawerState.rowRef}
+          auditId={selectedAuditId} comments={auditComments}
           onAddComment={handleAddComment}
           onRespondToComment={handleRespondToComment}
           onCloseComment={handleCloseComment}
-          currentUser={currentUser}
-          users={users}
+          currentUser={currentUser} users={users}
         />
       )}
     </div>
