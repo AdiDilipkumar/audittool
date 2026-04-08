@@ -191,14 +191,24 @@ export default function App() {
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
+  const [planningSubTab, setPlanningSubTab] = useState(null);
+
   function handleSelectAudit(auditId) {
     setSelectedAuditId(auditId);
     setActiveEngagementTab('planning');
+    setPlanningSubTab(null);
     closeDrawer();
   }
   function handleBackToPortfolio() {
     setSelectedAuditId(null);
+    setPlanningSubTab(null);
     closeDrawer();
+  }
+
+  // handleTabChange accepts an optional subTab argument (e.g. 'racm' from Fieldwork)
+  function handleTabChange(tabId, subTab) {
+    setActiveEngagementTab(tabId);
+    setPlanningSubTab(tabId === 'planning' ? (subTab || null) : null);
   }
 
   // ── Audit CRUD ─────────────────────────────────────────────────────────────
@@ -447,11 +457,12 @@ export default function App() {
             {...engagementProps}
             openCommentCount={openPlanningComments}
             progressData={progressData[selectedAuditId] || { planning: 0, fieldwork: 0, reporting: 0 }}
-            onTabChange={setActiveEngagementTab}
+            onTabChange={handleTabChange}
+            initialSubTab={planningSubTab}
           />
         )}
         {inEngagement && activeEngagementTab === 'fieldwork' && (
-          <FieldworkTab {...engagementProps} openCommentCount={openFieldworkComments} />
+          <FieldworkTab {...engagementProps} openCommentCount={openFieldworkComments} onTabChange={handleTabChange} />
         )}
         {inEngagement && activeEngagementTab === 'reporting' && (
           <ReportingTab {...engagementProps} openCommentCount={openReportingComments} />
