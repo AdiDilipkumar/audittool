@@ -74,6 +74,11 @@ export async function updateAuditStatus(auditId, status) {
   if (error) throw error;
 }
 
+export async function updateAuditField(auditId, field, value) {
+  const { error } = await supabase.from('audits').update({ [field]: value }).eq('id', auditId);
+  if (error) throw error;
+}
+
 // ── SIGN OFFS ─────────────────────────────────────────────────────────────────
 export async function fetchSignOffs() {
   const { data, error } = await supabase.from('sign_offs').select('*');
