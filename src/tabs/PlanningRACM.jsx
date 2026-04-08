@@ -12,7 +12,6 @@ const RISK_MATRIX = (l, i) => {
 };
 
 const DE_OPTIONS       = ['Not Tested', 'Effective', 'Ineffective'];
-const TESTING_OPTIONS  = ['Not Tested', 'In Progress', 'Tested - Effective', 'Tested - Ineffective'];
 const CTRL_TYPE_OPTIONS = ['Preventive', 'Detective', 'Corrective'];
 const FREQ_OPTIONS     = ['Per event', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
 const L_LABELS         = { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely' };
@@ -173,7 +172,7 @@ function AddControlModal({ riskRef, onAdd, onClose }) {
       sample_override:      false,
       design_conclusion:    'Not Tested',
       operating_effectiveness: 'Not Tested',
-      testing_status:       'Not Tested',
+      testing_status_fw:    'Not Started',
     });
     onClose();
   }
@@ -423,40 +422,31 @@ export default function PlanningRACM({ auditData, onUpdateAuditData, reviewComme
                           </div>
                         )}
 
-                        {/* Conclusions */}
+                        {/* Conclusions: Design editable here; O/E and Testing Status owned by Fieldwork */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                          {[
-                            { label: 'Design',         field: 'design_conclusion',      opts: DE_OPTIONS },
-                            { label: 'Operating (O/E)', field: 'operating_effectiveness', opts: DE_OPTIONS },
-                            { label: 'Testing Status', field: 'testing_status',          opts: TESTING_OPTIONS },
-                          ].map(col => {
-                            const val = ctrl[col.field];
-                            const isIneffective = val === 'Ineffective' || val === 'Tested - Ineffective';
-                            return (
-                              <div key={col.field}>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{col.label}</label>
-                                <select
-                                  value={val}
-                                  onChange={e => updateControl(risk.id, ctrl.id, col.field, e.target.value)}
-                                  style={{ fontSize: 12, padding: '4px 6px', border: `1px solid ${isIneffective ? 'var(--status-red-border)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: isIneffective ? 'var(--status-red-bg)' : 'var(--surface-1)', fontFamily: 'var(--font-sans)', width: '100%', color: isIneffective ? 'var(--status-red)' : 'var(--text-primary)' }}
-                                >
-                                  {col.opts.map(o => <option key={o} value={o}>{o}</option>)}
-                                </select>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Raise query shortcut if O/E = Ineffective */}
-                        {(ctrl.operating_effectiveness === 'Ineffective' || ctrl.testing_status === 'Tested - Ineffective') && onTabChange && (
-                          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--status-amber-bg)', border: '1px solid var(--status-amber-border)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 12, color: 'var(--status-amber)' }}>Control ineffective — raise a query to request management response.</span>
-                            <button onClick={() => onTabChange('fieldwork')}
-                              style={{ fontSize: 11, color: 'var(--ni-teal)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}>
-                              Go to Query Log
-                            </button>
+                          <div>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Design</label>
+                            <select
+                              value={ctrl.design_conclusion || 'Not Tested'}
+                              onChange={e => updateControl(risk.id, ctrl.id, 'design_conclusion', e.target.value)}
+                              style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-1)', fontFamily: 'var(--font-sans)', width: '100%', color: 'var(--text-primary)' }}
+                            >
+                              {DE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
                           </div>
-                        )}
+                          <div>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Operating (O/E)</label>
+                            <div style={{ fontSize: 12, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-0)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              {ctrl.operating_effectiveness || 'Not Tested'} (set in Fieldwork)
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Testing Status</label>
+                            <div style={{ fontSize: 12, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-0)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              {ctrl.testing_status_fw || 'Not Started'} (set in Fieldwork)
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

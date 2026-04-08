@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { SignOffBar } from '../components/UI';
+import { SignOffBar, Card, SectionHeader, Button, EmptyState, Modal, Field, Badge } from '../components/UI';
 import PlanningAuditDetails      from './PlanningAuditDetails';
 import PlanningInherentRisk      from './PlanningInherentRisk';
 import PlanningCombinedAssurance from './PlanningCombinedAssurance';
@@ -64,6 +64,117 @@ function computePlanningGates(auditData) {
   ];
 }
 
+// ── Planning Query Log ─────────────────────────────────────────────────────────
+function PlanningQueryLog({ queries = [], users = [], currentUser, auditId, onCreateQuery, onUpdateQuery, onPromoteToIssue }) {
+  const [showModal, setShowModal]         = useState(false);
+  const [showResolveId, setShowResolveId] = useState(null);
+  const [expandedId, setExpandedId]       = useState(null);
+  const [title, setTitle]                 = useState('');
+  const [detail, setDetail]               = useState('');
+  const [directedTo, setDirectedTo]       = useState('');
+  const [rationale, setRationale]         = useState('');
+
+  const planningQueries = queries.filter(q => q.phase === 'Planning');
+  const openCount = planningQueries.filter(q => q.status === 'Open').length;
+
+  function getUserName(id) { return users.find(u => u.id === id)?.full_name || '-'; }
+
+  function handleRaise() {
+    if (!title.trim() || !detail.trim()) return;
+    onCreateQuery({ audit_id: auditId, title: title.trim(), description: detail.trim(),
+      directed_to: directedTo.trim(), control_ref: null, phase: 'Planning' });
+    setTitle(''); setDetail(''); setDirectedTo(''); setShowModal(false);
+  }
+
+  function handleResolve() {
+    if (!rationale.trim()) return;
+    onUpdateQuery(showResolveId, { status: 'Resolved', resolved_rationale: rationale.trim() });
+    setRationale(''); setShowResolveId(null);
+  }
+
+  return (
+    <Card style={{ padding: 20 }}>
+      <SectionHeader
+        title="Query Log"
+        subtitle={`${planningQueries.length} quer${planningQueries.length !== 1 ? 'ies' : 'y'}${openCount > 0 ? ` - ${openCount} open` : ''}`}
+        action={<Button variant="secondary" size="sm" onClick={() => setShowModal(true)}>+ Raise Query</Button>}
+      />
+
+      {planningQueries.length === 0 ? (
+        <EmptyState icon="?" title="No planning queries yet" description="Raise queries to request information during the planning phase." />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {planningQueries.map(q => {
+            const isExp = expandedId === q.id;
+            return (
+              <div key={q.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                <div onClick={() => setExpandedId(isExp ? null : q.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer', background: 'var(--surface-0)' }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ni-teal)', flexShrink: 0 }}>{q.query_ref}</span>
+                  <p style={{ flex: 1, fontSize: 13, fontWeight: 500, margin: 0 }}>{q.title}</p>
+                  <Badge label={q.status} />
+                  <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{isExp ? '-' : '+'}</span>
+                </div>
+                {isExp && (
+                  <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+                    <p style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 8 }}>{q.description}</p>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      Raised by <strong>{getUserName(q.raised_by)}</strong>
+                      {q.directed_to && <> - Directed to <strong>{q.directed_to}</strong></>}
+                    </div>
+                    {q.response && (
+                      <div style={{ background: 'var(--status-green-bg)', border: '1px solid var(--status-green-border)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', marginBottom: 8, fontSize: 12 }}>
+                        <strong>Response:</strong> {q.response}
+                      </div>
+                    )}
+                    {q.resolved_rationale && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                        <strong>Resolution:</strong> {q.resolved_rationale}
+                      </div>
+                    )}
+                    {q.status === 'Open' && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <Button variant="secondary" size="sm" onClick={() => setShowResolveId(q.id)}>Resolve</Button>
+                        <Button variant="secondary" size="sm" onClick={() => onPromoteToIssue && onPromoteToIssue(q)}>Promote to Issue</Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showModal && (
+        <Modal title="Raise Query" onClose={() => setShowModal(false)} width={520}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Query Title *" value={title} onChange={setTitle} />
+            <Field label="Query Detail *" value={detail} onChange={setDetail} multiline rows={4} hint="Be specific about what information is being requested." />
+            <Field label="Directed To" value={directedTo} onChange={setDirectedTo} hint="Auditee contact name (optional)" />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button variant="primary" disabled={!title.trim() || !detail.trim()} onClick={handleRaise}>Raise Query</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {showResolveId && (
+        <Modal title="Resolve Query" onClose={() => setShowResolveId(null)} width={480}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Field label="Resolution Rationale *" value={rationale} onChange={setRationale} multiline rows={4} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Button variant="ghost" onClick={() => setShowResolveId(null)}>Cancel</Button>
+              <Button variant="primary" disabled={!rationale.trim()} onClick={handleResolve}>Mark Resolved</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </Card>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PlanningTab({
   openCommentCount,
@@ -75,6 +186,7 @@ export default function PlanningTab({
   currentUser, users = [],
   openDrawer,
   signOffs = [], onSignOff, onRevokeSignOff,
+  onCreateQuery, onUpdateQuery, onPromoteToIssue,
 }) {
   const [activeSection, setActiveSection] = useState(initialSubTab || 'details');
   const topRef = useRef(null);
@@ -95,6 +207,7 @@ export default function PlanningTab({
     { id: 'scope',     label: 'Scope Determination' },
     { id: 'tor',       label: 'Terms of Reference'  },
     { id: 'racm',      label: 'RACM'                },
+    { id: 'queries',   label: 'Query Log'           },
     { id: 'signoff',   label: 'Sign-off'            },
   ];
 
@@ -146,6 +259,18 @@ export default function PlanningTab({
       {activeSection === 'scope'     && <PlanningScope          key={dataKey} {...subProps} />}
       {activeSection === 'tor'       && <PlanningToR            key={dataKey} {...subProps} />}
       {activeSection === 'racm'      && <PlanningRACM           key={dataKey} {...subProps} onTabChange={onTabChange} />}
+
+      {activeSection === 'queries' && (
+        <PlanningQueryLog
+          queries={auditData?.queries || []}
+          users={users}
+          currentUser={currentUser}
+          auditId={audit?.id}
+          onCreateQuery={onCreateQuery}
+          onUpdateQuery={onUpdateQuery}
+          onPromoteToIssue={onPromoteToIssue}
+        />
+      )}
 
       {activeSection === 'signoff' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
