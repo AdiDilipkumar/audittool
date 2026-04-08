@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, SectionHeader, Badge, Button, Field, EmptyState, SignOffBar, Modal } from '../components/UI';
 
 const OPINION_OPTIONS = ['Satisfactory', 'Needs Improvement', 'Needs Significant Improvement', 'Not Effective'];
@@ -276,8 +276,21 @@ function DraftReport({ issues = [], auditData, onUpdateAuditData }) {
   const [opinion, setOpinion]         = useState(stored.opinion || 'Needs Improvement');
   const [execSummary, setExecSummary] = useState(stored.exec_summary || '');
 
+  // Sync local state when auditData.report changes from outside (e.g. realtime, remount)
+  const prevReportRef = React.useRef(null);
+  React.useEffect(() => {
+    const r = auditData?.report;
+    if (r && r !== prevReportRef.current) {
+      prevReportRef.current = r;
+      if (r.opinion     !== undefined) setOpinion(r.opinion);
+      if (r.exec_summary !== undefined) setExecSummary(r.exec_summary || '');
+    }
+  }, [auditData?.report]);
+
   function handleChange(field, val) {
-    const updated = { ...stored, [field]: val };
+    // Read current auditData.report at call time to avoid stale closure
+    const current = auditData?.report || {};
+    const updated = { ...current, [field]: val };
     onUpdateAuditData?.('report', updated);
   }
 
@@ -368,7 +381,7 @@ export default function ReportingTab({
   audit, auditData, currentUser, users = [],
   onCreateIssue, onUpdateIssue,
   onUpdateAuditData,
-  onSignOff, signOffs = [],
+  onSignOff, onRevokeSignOff, signOffs = [],
   openCommentCount,
   promoteQuery,
   onCreateIssueFromPromotion,
@@ -448,7 +461,8 @@ export default function ReportingTab({
           </div>
           {signOff ? (
             <SignOffBar signOff={signOff} currentUser={currentUser} gates={reportingGates}
-              onSign={canSignOff ? (role) => onSignOff(signOff.id, role) : null} />
+              onSign={canSignOff ? (role) => onSignOff(signOff.id, role) : null}
+              onRevoke={(role) => onRevokeSignOff && onRevokeSignOff(signOff.id, role)} />
           ) : (
             <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--text-muted)' }}>
               Sign-off record not found for this engagement.

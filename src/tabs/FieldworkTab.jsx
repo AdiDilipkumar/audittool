@@ -311,7 +311,7 @@ function ControlCard({ risk, ctrl, queries, users, currentUser, auditId,
           {/* Ineffective alert */}
           {(oe === 'Ineffective' || oe === 'Partially Effective') && (
             <div style={{ padding: '8px 12px', background: 'var(--status-amber-bg)', border: '1px solid var(--status-amber-border)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--status-amber)' }}>
-              O/E = {oe} — raise a query above or promote to an issue via the query log.
+              O/E = {oe} - raise a query above or promote to an issue via the query log.
             </div>
           )}
         </div>
@@ -403,7 +403,7 @@ export default function FieldworkTab({
   audit, auditData, currentUser, users = [],
   onCreateQuery, onUpdateQuery,
   onUpdateAuditData,
-  onSignOff, signOffs = [],
+  onSignOff, onRevokeSignOff, signOffs = [],
   openCommentCount,
   onPromoteToIssue,
   onTabChange,
@@ -482,7 +482,8 @@ export default function FieldworkTab({
           </div>
           {signOff ? (
             <SignOffBar signOff={signOff} currentUser={currentUser} gates={fieldworkGates}
-              onSign={canSignOff ? (role) => onSignOff(signOff.id, role) : null} />
+              onSign={canSignOff ? (role) => onSignOff(signOff.id, role) : null}
+              onRevoke={(role) => onRevokeSignOff && onRevokeSignOff(signOff.id, role)} />
           ) : (
             <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--text-muted)' }}>
               Sign-off record not found for this engagement.

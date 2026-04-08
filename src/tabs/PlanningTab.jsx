@@ -57,10 +57,10 @@ function computePlanningGates(auditData) {
   const racmDone   = racmRisks.length > 0 && racmRisks.some(r => r.controls.length > 0);
 
   return [
-    { label: 'Terms of Reference — all 6 fields must be completed',            passed: torDone },
-    { label: 'Inherent Risk Assessment — rationale required for all 10 factors', passed: iraDone },
-    { label: 'Scope Determination — at least one key process must be added',   passed: scopeDone },
-    { label: 'RACM — at least one risk with at least one control',             passed: racmDone },
+    { label: 'Terms of Reference - all 6 fields must be completed',            passed: torDone },
+    { label: 'Inherent Risk Assessment - rationale required for all 10 factors', passed: iraDone },
+    { label: 'Scope Determination - at least one key process must be added',   passed: scopeDone },
+    { label: 'RACM - at least one risk with at least one control',             passed: racmDone },
   ];
 }
 
@@ -181,7 +181,7 @@ export default function PlanningTab({
   progressData = { planning: 0, fieldwork: 0, reporting: 0 },
   onTabChange,
   initialSubTab,
-  audit, auditData, onUpdateAuditData,
+  audit, auditData, onUpdateAuditData, onUpdateAudit,
   reviewComments = [],
   currentUser, users = [],
   openDrawer,
@@ -211,7 +211,7 @@ export default function PlanningTab({
     { id: 'signoff',   label: 'Sign-off'            },
   ];
 
-  const subProps = { audit, auditData, onUpdateAuditData, reviewComments, currentUser, users, openDrawer };
+  const subProps = { audit, auditData, onUpdateAuditData, onUpdateAudit, reviewComments, currentUser, users, openDrawer };
   // Bug 1 fix: force remount of each planning sub-component once auditData arrives from Supabase.
   // If the component mounts while auditData is still null (async not yet complete), useState
   // initialises blank and never re-inits. Changing the key causes React to unmount+remount,
