@@ -290,6 +290,7 @@ const META_KEY_MAP = {
   racmRisks:         'racm_risks',
   budget:            'budget',
   timeline:          'timeline',
+  report:            'report',
 };
 
 export async function upsertAuditMetadata(auditId, key, value) {
