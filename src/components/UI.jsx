@@ -56,29 +56,22 @@ export function Badge({ label, type = 'status', size = 'sm' }) {
   );
 }
 
-// ── Card ──────────────────────────────────────────────────────────────────
 export function Card({ children, style = {}, className = '' }) {
   return (
     <div className={className} style={{
-      background: 'var(--surface-1)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)',
-      boxShadow: 'var(--shadow-sm)',
-      ...style,
+      background: 'var(--surface-1)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)', ...style,
     }}>
       {children}
     </div>
   );
 }
 
-// ── SectionHeader ──────────────────────────────────────────────────────────
 export function SectionHeader({ title, subtitle, action }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
       <div>
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: subtitle ? 2 : 0 }}>
-          {title}
-        </h3>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: subtitle ? 2 : 0 }}>{title}</h3>
         {subtitle && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{subtitle}</p>}
       </div>
       {action}
@@ -86,7 +79,6 @@ export function SectionHeader({ title, subtitle, action }) {
   );
 }
 
-// ── Button ──────────────────────────────────────────────────────────────
 export function Button({ children, onClick, variant = 'primary', size = 'md', disabled = false, style = {} }) {
   const base = {
     display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -110,7 +102,6 @@ export function Button({ children, onClick, variant = 'primary', size = 'md', di
   );
 }
 
-// ── Field ──────────────────────────────────────────────────────────────────
 export function Field({ label, value, onChange, multiline = false, rows = 3, hint }) {
   const inputStyle = {
     width: '100%', padding: '8px 10px',
@@ -133,7 +124,6 @@ export function Field({ label, value, onChange, multiline = false, rows = 3, hin
   );
 }
 
-// ── Select ──────────────────────────────────────────────────────────────────
 export function Select({ label, value, onChange, options }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -150,7 +140,6 @@ export function Select({ label, value, onChange, options }) {
   );
 }
 
-// ── EmptyState ──────────────────────────────────────────────────────────────
 export function EmptyState({ icon, title, description, action }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center' }}>
@@ -163,58 +152,186 @@ export function EmptyState({ icon, title, description, action }) {
 }
 
 // ── SignOffBar ─────────────────────────────────────────────────────────────
-export function SignOffBar({ signOff, currentUser, onSign }) {
+// signOff row from DB — now includes *_signed_by and *_revoked_by fields
+// gates: array of { label, passed } — only checked for auditor tier
+// onSign(role) — called when user clicks Sign Off
+// onRevoke(role) — called when signer clicks Withdraw
+export function SignOffBar({ signOff, currentUser, onSign, onRevoke, gates = [] }) {
+  const [confirmRevoke, setConfirmRevoke] = useState(null);
+  const [showGateBlock, setShowGateBlock] = useState(false);
+
+  if (!signOff) return null;
+
   const tiers = [
-    { key: 'auditor',  label: 'Audit Lead', id: signOff?.auditor_id,  signed_at: signOff?.auditor_signed_at },
-    { key: 'reviewer', label: 'Reviewer',   id: signOff?.reviewer_id, signed_at: signOff?.reviewer_signed_at },
-    { key: 'hia',      label: 'HIA',        id: signOff?.hia_id,      signed_at: signOff?.hia_signed_at },
+    {
+      key:       'auditor',
+      label:     'Audit Lead',
+      signed_at: signOff.auditor_signed_at,
+      signed_by: signOff.auditor_signed_by,
+    },
+    {
+      key:       'reviewer',
+      label:     'Reviewer',
+      signed_at: signOff.reviewer_signed_at,
+      signed_by: signOff.reviewer_signed_by,
+      requires:  'auditor',
+    },
+    {
+      key:       'hia',
+      label:     'HIA',
+      signed_at: signOff.hia_signed_at,
+      signed_by: signOff.hia_signed_by,
+      requires:  'reviewer',
+    },
   ];
 
+  const failedGates = gates.filter(g => !g.passed);
+  const allGatesPassed = failedGates.length === 0;
+
+  function handleSignClick(tierKey) {
+    if (tierKey === 'auditor' && !allGatesPassed) {
+      setShowGateBlock(true);
+      return;
+    }
+    onSign && onSign(tierKey);
+  }
+
+  function handleRevokeClick(tierKey) {
+    setConfirmRevoke(tierKey);
+  }
+
+  function confirmRevokeAction() {
+    onRevoke && onRevoke(confirmRevoke);
+    setConfirmRevoke(null);
+  }
+
+  // Check if previous tier is signed (for sequential requirement)
+  const auditorSigned   = !!signOff.auditor_signed_at;
+  const reviewerSigned  = !!signOff.reviewer_signed_at;
+
   return (
-    <Card style={{ padding: '16px 20px' }}>
-      <SectionHeader title="Sign-off" subtitle="Three-tier approval required to close this phase" />
-      <div style={{ display: 'flex', gap: 12 }}>
-        {tiers.map((tier, i) => {
-          const signed = !!tier.signed_at;
-          const canSign = currentUser && tier.id === currentUser.id && !signed;
-          return (
-            <div key={tier.key} style={{
-              flex: 1, padding: 14, borderRadius: 'var(--radius-md)',
-              background: signed ? 'var(--status-green-bg)' : 'var(--surface-0)',
-              border: `1px solid ${signed ? 'var(--status-green-border)' : 'var(--border)'}`,
-              display: 'flex', flexDirection: 'column', gap: 6,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
-                {i + 1}. {tier.label}
-              </span>
-              {signed
-                ? <span style={{ fontSize: 12, color: 'var(--status-green)', fontWeight: 500 }}>
-                    Signed {new Date(tier.signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+    <>
+      <Card style={{ padding: '16px 20px' }}>
+        <SectionHeader title="Sign-off" subtitle="Three-tier approval required to close this phase" />
+
+        {/* Gate block warning */}
+        {showGateBlock && failedGates.length > 0 && (
+          <div style={{
+            marginBottom: 16, padding: '12px 16px',
+            background: 'var(--status-red-bg)', border: '1px solid var(--status-red-border)',
+            borderRadius: 'var(--radius-md)',
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--status-red)', marginBottom: 8 }}>
+              The following must be completed before sign-off:
+            </p>
+            {failedGates.map(g => (
+              <div key={g.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--status-red)', marginBottom: 4 }}>
+                <span>x</span>
+                <span>{g.label}</span>
+              </div>
+            ))}
+            <button
+              onClick={() => setShowGateBlock(false)}
+              style={{ marginTop: 8, fontSize: 11, color: 'var(--status-red)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          {tiers.map((tier, i) => {
+            const signed = !!tier.signed_at;
+            const prevSigned = tier.key === 'auditor' ? true
+              : tier.key === 'reviewer' ? auditorSigned
+              : reviewerSigned;
+            const isMySign = signed && currentUser && tier.signed_by === currentUser.id;
+            const canSign  = !signed && prevSigned && currentUser;
+
+            return (
+              <div key={tier.key} style={{
+                flex: 1, padding: 14, borderRadius: 'var(--radius-md)',
+                background: signed ? 'var(--status-green-bg)' : 'var(--surface-0)',
+                border: `1px solid ${signed ? 'var(--status-green-border)' : 'var(--border)'}`,
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
+                  {i + 1}. {tier.label}
+                </span>
+                {signed ? (
+                  <>
+                    <span style={{ fontSize: 12, color: 'var(--status-green)', fontWeight: 500 }}>
+                      Signed {new Date(tier.signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    </span>
+                    {tier.signed_by && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        by user {tier.signed_by}
+                      </span>
+                    )}
+                    {isMySign && onRevoke && (
+                      <button
+                        onClick={() => handleRevokeClick(tier.key)}
+                        style={{
+                          marginTop: 4, padding: '4px 8px', fontSize: 11,
+                          background: 'none',
+                          border: '1px solid var(--status-amber-border)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: 'var(--status-amber)', cursor: 'pointer',
+                        }}
+                      >
+                        Withdraw
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {prevSigned ? 'Pending' : 'Awaiting prior tier'}
                   </span>
-                : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pending</span>
-              }
-              {canSign && onSign && (
-                <button
-                  onClick={() => onSign(tier.key)}
-                  style={{
-                    marginTop: 4, padding: '5px 10px',
-                    background: 'var(--ni-teal)', color: '#fff',
-                    border: 'none', borderRadius: 'var(--radius-md)',
-                    fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                  }}
-                >
-                  Sign off
-                </button>
-              )}
+                )}
+                {canSign && onSign && (
+                  <button
+                    onClick={() => handleSignClick(tier.key)}
+                    style={{
+                      marginTop: 4, padding: '5px 10px',
+                      background: 'var(--ni-teal)', color: '#fff',
+                      border: 'none', borderRadius: 'var(--radius-md)',
+                      fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    }}
+                  >
+                    Sign off
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Withdraw confirmation */}
+      {confirmRevoke && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,22,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: 'var(--surface-1)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', padding: 28, maxWidth: 400, width: '100%' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Withdraw sign-off?</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+              This will withdraw your sign-off
+              {confirmRevoke === 'auditor' ? ' and also clear Reviewer and HIA sign-off' : confirmRevoke === 'reviewer' ? ' and also clear HIA sign-off' : ''}.
+              The phase will be reopened for editing.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmRevoke(null)} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={confirmRevokeAction} style={{ padding: '7px 14px', background: 'var(--status-amber)', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#fff' }}>
+                Withdraw
+              </button>
             </div>
-          );
-        })}
-      </div>
-    </Card>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────────
 export function Modal({ title, onClose, children, width = 560 }) {
   return (
     <div style={{
@@ -237,92 +354,51 @@ export function Modal({ title, onClose, children, width = 560 }) {
 }
 
 // ── New Audit Modal ────────────────────────────────────────────────────────
-// users prop passed in from App — no mockData import needed
 export function NewAuditModal({ onClose, onSubmit, users = [] }) {
   const HIA_USER = users.find(u => u.role === 'HIA');
-
   const [fields, setFields] = useState({
-    title: '',
-    entity: '',
-    audit_type: 'Assurance',
-    period_under_review: '',
-    planned_start: '',
-    planned_end: '',
-    lead_auditor_id: '',
-    reviewer_id: '',
-    auditor_id: '',
-    it_auditor_id: '',
+    title: '', entity: '', audit_type: 'Assurance',
+    period_under_review: '', planned_start: '', planned_end: '',
+    lead_auditor_id: '', reviewer_id: '', auditor_id: '', it_auditor_id: '',
   });
-
   const set = (key, val) => setFields(prev => ({ ...prev, [key]: val }));
 
-  const labelStyle = {
-    display: 'block', fontSize: 11, fontWeight: 600,
-    color: 'var(--text-muted)', textTransform: 'uppercase',
-    letterSpacing: '0.06em', marginBottom: 4,
-  };
-  const inputStyle = {
-    width: '100%', padding: '8px 10px',
-    border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
-    fontSize: 13, fontFamily: 'var(--font-sans)',
-    background: 'var(--surface-0)', color: 'var(--text-primary)', outline: 'none',
-  };
-
-  // Non-HIA users available for role assignment
-  const assignableUsers = users.filter(u => u.role !== 'HIA');
-
-  // Validation: title + lead + reviewer required; lead != reviewer
+  const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 };
+  const inputStyle = { width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, fontFamily: 'var(--font-sans)', background: 'var(--surface-0)', color: 'var(--text-primary)', outline: 'none' };
+  const assignable = users.filter(u => u.role !== 'HIA');
   const leadAndReviewerSame = fields.lead_auditor_id && fields.reviewer_id && fields.lead_auditor_id === fields.reviewer_id;
   const isValid = fields.title.trim() && fields.lead_auditor_id && fields.reviewer_id && !leadAndReviewerSame;
 
-  function buildUserOptions(placeholder = '-- Select --') {
+  function buildOptions(placeholder = '-- Select --') {
     return [
       <option key="" value="">{placeholder}</option>,
-      ...assignableUsers.map(u => (
-        <option key={u.id} value={u.id}>{u.full_name}</option>
-      )),
+      ...assignable.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>),
     ];
   }
 
   return (
     <Modal title="New Audit" onClose={onClose} width={560}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-        {/* Title */}
         <div>
           <label style={labelStyle}>Audit Title *</label>
-          <input
-            style={inputStyle}
-            value={fields.title}
-            onChange={e => set('title', e.target.value)}
-            placeholder="e.g. Fund Operations: Distribution Controls"
-          />
+          <input style={inputStyle} value={fields.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Fund Operations: Distribution Controls" />
         </div>
-
-        {/* Entity + Type */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <label style={labelStyle}>Auditable Entity</label>
-            <input style={inputStyle} value={fields.entity} onChange={e => set('entity', e.target.value)} placeholder="e.g. Fund Operations" />
+            <input style={inputStyle} value={fields.entity} onChange={e => set('entity', e.target.value)} />
           </div>
           <div>
             <label style={labelStyle}>Audit Type</label>
             <select style={inputStyle} value={fields.audit_type} onChange={e => set('audit_type', e.target.value)}>
-              <option>Assurance</option>
-              <option>Advisory</option>
-              <option>Agile</option>
-              <option>Ad Hoc</option>
+              <option>Assurance</option><option>Advisory</option><option>Agile</option><option>Ad Hoc</option>
             </select>
           </div>
         </div>
-
-        {/* Period */}
         <div>
           <label style={labelStyle}>Period Under Review</label>
           <input style={inputStyle} value={fields.period_under_review} onChange={e => set('period_under_review', e.target.value)} placeholder="e.g. Q1 2026 (Jan - Mar 2026)" />
         </div>
-
-        {/* Dates */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <label style={labelStyle}>Planned Start *</label>
@@ -333,76 +409,42 @@ export function NewAuditModal({ onClose, onSubmit, users = [] }) {
             <input style={inputStyle} type="date" value={fields.planned_end} onChange={e => set('planned_end', e.target.value)} />
           </div>
         </div>
-
-        {/* Divider */}
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-            Engagement Team
-          </p>
-
-          {/* HIA - always Elsabe, locked */}
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Engagement Team</p>
           <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>HIA (Head of Internal Audit)</label>
-            <div style={{
-              padding: '8px 10px', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)', fontSize: 13,
-              background: 'var(--surface-0)', color: 'var(--text-muted)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
+            <label style={labelStyle}>HIA (always Elsabe De Vries)</label>
+            <div style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, background: 'var(--surface-0)', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
               <span>{HIA_USER?.full_name || 'Elsabe De Vries'}</span>
               <span style={{ fontSize: 11, color: 'var(--ni-teal)' }}>Auto-assigned</span>
             </div>
           </div>
-
-          {/* Lead + Reviewer */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={labelStyle}>Audit Lead *</label>
-              <select style={inputStyle} value={fields.lead_auditor_id} onChange={e => set('lead_auditor_id', e.target.value)}>
-                {buildUserOptions()}
-              </select>
+              <select style={inputStyle} value={fields.lead_auditor_id} onChange={e => set('lead_auditor_id', e.target.value)}>{buildOptions()}</select>
             </div>
             <div>
               <label style={labelStyle}>Reviewer *</label>
-              <select style={inputStyle} value={fields.reviewer_id} onChange={e => set('reviewer_id', e.target.value)}>
-                {buildUserOptions()}
-              </select>
+              <select style={inputStyle} value={fields.reviewer_id} onChange={e => set('reviewer_id', e.target.value)}>{buildOptions()}</select>
             </div>
           </div>
-
           {leadAndReviewerSame && (
-            <p style={{ fontSize: 12, color: 'var(--status-red)', marginBottom: 10, marginTop: -6 }}>
-              Audit Lead and Reviewer cannot be the same person.
-            </p>
+            <p style={{ fontSize: 12, color: 'var(--status-red)', marginBottom: 10, marginTop: -6 }}>Audit Lead and Reviewer cannot be the same person.</p>
           )}
-
-          {/* Auditor + IT Auditor (optional) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>Auditor <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-              <select style={inputStyle} value={fields.auditor_id} onChange={e => set('auditor_id', e.target.value)}>
-                {buildUserOptions('-- None --')}
-              </select>
+              <select style={inputStyle} value={fields.auditor_id} onChange={e => set('auditor_id', e.target.value)}>{buildOptions('-- None --')}</select>
             </div>
             <div>
               <label style={labelStyle}>IT Auditor <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-              <select style={inputStyle} value={fields.it_auditor_id} onChange={e => set('it_auditor_id', e.target.value)}>
-                {buildUserOptions('-- None --')}
-              </select>
+              <select style={inputStyle} value={fields.it_auditor_id} onChange={e => set('it_auditor_id', e.target.value)}>{buildOptions('-- None --')}</select>
             </div>
           </div>
         </div>
-
-        {/* Actions */}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            disabled={!isValid}
-            onClick={() => { onSubmit(fields); onClose(); }}
-          >
-            Create Audit
-          </Button>
+          <Button variant="primary" disabled={!isValid} onClick={() => { onSubmit(fields); onClose(); }}>Create Audit</Button>
         </div>
       </div>
     </Modal>
@@ -412,50 +454,32 @@ export function NewAuditModal({ onClose, onSubmit, users = [] }) {
 // ── CommentButton ──────────────────────────────────────────────────────────
 export function CommentButton({ sectionRef, rowRef = null, comments = [], onClick }) {
   const openCount = comments.filter(c =>
-    c.section_ref === sectionRef &&
-    (rowRef ? c.row_ref === rowRef : true) &&
-    c.status === 'Open'
+    c.section_ref === sectionRef && (rowRef ? c.row_ref === rowRef : true) && c.status === 'Open'
   ).length;
-
   const totalCount = comments.filter(c =>
-    c.section_ref === sectionRef &&
-    (rowRef ? c.row_ref === rowRef : true)
+    c.section_ref === sectionRef && (rowRef ? c.row_ref === rowRef : true)
   ).length;
-
   return (
-    <button
-      onClick={e => { e.stopPropagation(); onClick(); }}
-      title={`${totalCount} comment${totalCount !== 1 ? 's' : ''}`}
+    <button onClick={e => { e.stopPropagation(); onClick(); }}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        padding: '3px 8px',
-        border: '1px solid var(--border)',
-        borderRadius: '100px',
+        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px',
+        border: '1px solid var(--border)', borderRadius: '100px',
         background: openCount > 0 ? 'var(--status-amber-bg)' : 'var(--surface-0)',
         borderColor: openCount > 0 ? 'var(--status-amber-border)' : 'var(--border)',
         cursor: 'pointer', fontSize: 11,
         color: openCount > 0 ? 'var(--status-amber)' : 'var(--text-muted)',
         transition: 'all 0.15s', flexShrink: 0,
-      }}
-    >
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-        <path d="M8 1.5C4.41 1.5 1.5 4.07 1.5 7.25c0 1.47.57 2.81 1.5 3.84l-.94 2.41 2.54-.9C5.4 12.84 6.67 13 8 13c3.59 0 6.5-2.57 6.5-5.75S11.59 1.5 8 1.5z"
-          stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      }}>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1.5C4.41 1.5 1.5 4.07 1.5 7.25c0 1.47.57 2.81 1.5 3.84l-.94 2.41 2.54-.9C5.4 12.84 6.67 13 8 13c3.59 0 6.5-2.57 6.5-5.75S11.59 1.5 8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
       </svg>
-      {totalCount > 0 && (
-        <span style={{ fontWeight: 600 }}>{openCount > 0 ? openCount : totalCount}</span>
-      )}
+      {totalCount > 0 && <span style={{ fontWeight: 600 }}>{openCount > 0 ? openCount : totalCount}</span>}
     </button>
   );
 }
 
 // ── CommentDrawer ──────────────────────────────────────────────────────────
-export function CommentDrawer({
-  isOpen, onClose, title, contextLabel,
-  sectionRef, rowRef, auditId,
-  comments, onAddComment, onRespondToComment, onCloseComment,
-  currentUser, users = [],
-}) {
+export function CommentDrawer({ isOpen, onClose, title, contextLabel, sectionRef, rowRef, auditId, comments, onAddComment, onRespondToComment, onCloseComment, currentUser, users = [] }) {
   const [showForm, setShowForm]         = useState(false);
   const [newText, setNewText]           = useState('');
   const [responseText, setResponseText] = useState({});
@@ -464,22 +488,14 @@ export function CommentDrawer({
   const userName = id => users.find(u => u.id === id)?.full_name || 'Unknown';
 
   const threads = comments.filter(c =>
-    c.section_ref === sectionRef &&
-    (rowRef ? c.row_ref === rowRef : !c.row_ref || c.row_ref === null)
+    c.section_ref === sectionRef && (rowRef ? c.row_ref === rowRef : !c.row_ref || c.row_ref === null)
   );
-
   const openCount = threads.filter(c => c.status === 'Open').length;
 
   const handleAdd = () => {
     if (!newText.trim()) return;
-    onAddComment({
-      audit_id: auditId,
-      tab: contextLabel?.split(' - ')[0] || 'Planning',
-      sectionRef, rowRef: rowRef || null,
-      comment_text: newText.trim(),
-    });
-    setNewText('');
-    setShowForm(false);
+    onAddComment({ audit_id: auditId, tab: contextLabel?.split(' - ')[0] || 'Planning', sectionRef, rowRef: rowRef || null, comment_text: newText.trim() });
+    setNewText(''); setShowForm(false);
   };
 
   const handleRespond = (id) => {
@@ -493,9 +509,7 @@ export function CommentDrawer({
 
   return (
     <>
-      {isOpen && (
-        <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(10,22,40,0.15)' }} />
-      )}
+      {isOpen && <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(10,22,40,0.15)' }} />}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 400,
         background: 'var(--surface-1)', borderLeft: '1px solid var(--border)',
@@ -511,16 +525,10 @@ export function CommentDrawer({
           </div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>x</button>
         </div>
-
         <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--border)', background: 'var(--surface-0)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {threads.length} comment{threads.length !== 1 ? 's' : ''}{openCount > 0 ? ` - ${openCount} open` : ''}
-          </span>
-          <button onClick={() => setShowForm(s => !s)} style={{ padding: '5px 12px', background: 'var(--ni-teal)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
-            + New comment
-          </button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{threads.length} comment{threads.length !== 1 ? 's' : ''}{openCount > 0 ? ` - ${openCount} open` : ''}</span>
+          <button onClick={() => setShowForm(s => !s)} style={{ padding: '5px 12px', background: 'var(--ni-teal)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>+ New comment</button>
         </div>
-
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {showForm && (
             <div style={{ border: '1px solid var(--ni-teal)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -535,20 +543,11 @@ export function CommentDrawer({
               </div>
             </div>
           )}
-
           {threads.length === 0 && !showForm && (
-            <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
-              No comments yet on this {rowRef ? 'item' : 'section'}.
-            </div>
+            <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)', fontSize: 13 }}>No comments yet on this {rowRef ? 'item' : 'section'}.</div>
           )}
-
           {[...threads].reverse().map(thread => (
-            <div key={thread.id} style={{
-              border: `1px solid var(--border)`,
-              borderLeft: `3px solid ${statusBorderColor[thread.status] || 'var(--border)'}`,
-              borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-              opacity: thread.status === 'Closed' ? 0.7 : 1,
-            }}>
+            <div key={thread.id} style={{ border: '1px solid var(--border)', borderLeft: `3px solid ${statusBorderColor[thread.status] || 'var(--border)'}`, borderRadius: 'var(--radius-lg)', overflow: 'hidden', opacity: thread.status === 'Closed' ? 0.7 : 1 }}>
               <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, marginTop: 1, background: thread.status === 'Closed' ? 'var(--text-muted)' : 'var(--ni-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600, color: '#fff' }}>
                   {userName(thread.raised_by).split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -560,7 +559,6 @@ export function CommentDrawer({
                 <Badge label={thread.status} size="sm" />
               </div>
               <div style={{ padding: '0 14px 10px 52px', fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6 }}>{thread.comment_text}</div>
-
               {thread.response_text && (
                 <div style={{ background: 'var(--ni-teal-dim)', borderTop: '1px solid var(--border)', padding: '10px 14px', display: 'flex', gap: 8 }}>
                   <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, marginTop: 2, background: 'var(--ni-teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: '#fff' }}>
@@ -572,7 +570,6 @@ export function CommentDrawer({
                   </div>
                 </div>
               )}
-
               {thread.status !== 'Closed' && (
                 <div style={{ borderTop: '1px solid var(--border)', padding: '8px 14px', background: 'var(--surface-0)' }}>
                   {thread.status === 'Open' && (
@@ -583,13 +580,10 @@ export function CommentDrawer({
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button onClick={() => onCloseComment(thread.id)} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}>
-                      Mark closed
-                    </button>
+                    <button onClick={() => onCloseComment(thread.id)} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}>Mark closed</button>
                   </div>
                 </div>
               )}
-
               {thread.status === 'Closed' && (
                 <div style={{ padding: '6px 14px', fontSize: 11, color: 'var(--status-green)', borderTop: '1px solid var(--border)' }}>
                   Closed by {userName(thread.closed_by)} - {fmt(thread.closed_at)}
