@@ -276,16 +276,16 @@ function DraftReport({ issues = [], auditData, onUpdateAuditData }) {
   const [opinion, setOpinion]         = useState(stored.opinion || 'Needs Improvement');
   const [execSummary, setExecSummary] = useState(stored.exec_summary || '');
 
-  // Sync local state when auditData.report changes from outside (e.g. realtime, remount)
-  const prevReportRef = React.useRef(null);
+  // Sync local state only when report data values actually change.
+  // JSON.stringify prevents reference equality false-positives which would
+  // reset local state on every parent re-render.
+  const reportJson = JSON.stringify(auditData?.report);
   React.useEffect(() => {
     const r = auditData?.report;
-    if (r && r !== prevReportRef.current) {
-      prevReportRef.current = r;
-      if (r.opinion     !== undefined) setOpinion(r.opinion);
-      if (r.exec_summary !== undefined) setExecSummary(r.exec_summary || '');
-    }
-  }, [auditData?.report]);
+    if (!r) return;
+    if (r.opinion      !== undefined) setOpinion(r.opinion);
+    if (r.exec_summary !== undefined) setExecSummary(r.exec_summary || '');
+  }, [reportJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleChange(field, val) {
     // Read current auditData.report at call time to avoid stale closure
@@ -423,7 +423,8 @@ export default function ReportingTab({
         ))}
       </div>
 
-      {activeSection === 'issues' && (
+      {/* Always mounted - display:none prevents unmount/remount state loss */}
+      <div style={{ display: activeSection === 'issues' ? 'block' : 'none' }}>
         <IssuesList
           issues={issues}
           onCreateIssue={onCreateIssue}
@@ -432,15 +433,15 @@ export default function ReportingTab({
           onCreateIssueFromPromotion={onCreateIssueFromPromotion}
           onDismissPromotion={onDismissPromotion}
         />
-      )}
+      </div>
 
-      {activeSection === 'report' && (
+      <div style={{ display: activeSection === 'report' ? 'block' : 'none' }}>
         <DraftReport
           issues={issues}
           auditData={auditData}
           onUpdateAuditData={onUpdateAuditData}
         />
-      )}
+      </div>
 
       {activeSection === 'signoff' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
