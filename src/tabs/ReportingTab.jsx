@@ -375,19 +375,23 @@ export default function ReportingTab({
 }) {
   const [activeSection, setActiveSection] = useState('issues');
 
-  // Lifted from DraftReport so gates can read current local values immediately
-  const stored = auditData?.report || {};
-  const [opinion,     setOpinion]     = useState(stored.opinion      || 'Needs Improvement');
-  const [execSummary, setExecSummary] = useState(stored.exec_summary || '');
+  // Lifted from DraftReport so gates can read current local values immediately.
+  // Initialise from auditData if already loaded, otherwise blank.
+  // We use a ref to track whether we have done the initial sync from Supabase
+  // so we never overwrite user edits with a stale persisted value.
+  const [opinion,     setOpinion]     = useState('');
+  const [execSummary, setExecSummary] = useState('');
+  const initialSyncDone = React.useRef(false);
 
-  // Resync when auditData.report changes (e.g. on initial load)
-  const reportJson = JSON.stringify(auditData?.report);
   useEffect(() => {
+    if (initialSyncDone.current) return; // never overwrite after first sync
     const r = auditData?.report;
     if (!r) return;
-    if (r.opinion      !== undefined) setOpinion(r.opinion);
-    if (r.exec_summary !== undefined) setExecSummary(r.exec_summary || '');
-  }, [reportJson]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Only sync once - when auditData first arrives from Supabase
+    initialSyncDone.current = true;
+    setOpinion(r.opinion      || 'Needs Improvement');
+    setExecSummary(r.exec_summary || '');
+  }, [auditData?.report]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const issues  = auditData?.issues  || [];
   const signOff = signOffs.find(s => s.tab === 'Reporting') || null;
