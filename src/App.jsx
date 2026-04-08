@@ -239,6 +239,7 @@ export default function App() {
         tor: 'tor', inherentRisk: 'inherent_risk',
         combinedAssurance: 'combined_assurance', scopeItems: 'scope_items',
         racmRisks: 'racm_risks', budget: 'budget', timeline: 'timeline',
+        report: 'report',
       }[key] || key;
       setEngagementData(prev => prev ? {
         ...prev,
@@ -247,7 +248,33 @@ export default function App() {
     } catch (err) { console.error('Update audit data error:', err); }
   }
 
-  // ── Queries ────────────────────────────────────────────────────────────────
+  // ── Promote query to issue ─────────────────────────────────────────────────
+  const [promoteQuery, setPromoteQuery] = useState(null); // query object pending promotion
+
+  async function handlePromoteToIssue(query) {
+    // Store the query so ReportingTab/modal can open with it linked
+    setPromoteQuery(query);
+    // Navigate to reporting tab so the user can fill in the issue
+    handleTabChange('reporting');
+  }
+
+  async function handleCreateIssueFromPromotion(issueData) {
+    try {
+      const created = await createIssue({ ...issueData, audit_id: selectedAuditId });
+      // Mark the originating query as promoted
+      if (promoteQuery?.id) {
+        await updateQuery(promoteQuery.id, {
+          status: 'Promoted',
+          promoted_to_issue_id: created?.id || `issue-${Date.now()}`,
+        });
+      }
+      setPromoteQuery(null);
+    } catch (err) { console.error('Promote to issue error:', err); }
+  }
+
+  function handleDismissPromotion() {
+    setPromoteQuery(null);
+  }
   async function handleCreateQuery(queryData) {
     try { await createQuery({ ...queryData, raised_by: currentUser.id }); }
     catch (err) { console.error('Create query error:', err); }
@@ -325,6 +352,7 @@ export default function App() {
     scopeItems:        engagementData.metadata?.scope_items       || engagementData.metadata?.scopeItems       || {},
     tor:               engagementData.metadata?.tor               || {},
     racmRisks:         engagementData.metadata?.racm_risks        || engagementData.metadata?.racmRisks        || [],
+    report:            engagementData.metadata?.report            || {},
     queries:           engagementData.queries       || [],
     issues:            engagementData.issues        || [],
     workingPapers:     engagementData.workingPapers || [],
@@ -345,12 +373,17 @@ export default function App() {
     onUpdateWorkingPaper:  handleUpdateWorkingPaper,
     onSignOff:         handleSignOff,
     onRevokeSignOff:   handleRevokeSignOff,
+    onPromoteToIssue:  handlePromoteToIssue,
     signOffs:          signOffs.filter(so => so.audit_id === selectedAuditId),
     reviewComments:    auditComments,
     onAddComment:      handleAddComment,
     onRespondToComment: handleRespondToComment,
     onCloseComment:    handleCloseComment,
     openDrawer,
+    // promotion state — passed to ReportingTab so it can open the Add Issue modal pre-linked
+    promoteQuery,
+    onCreateIssueFromPromotion: handleCreateIssueFromPromotion,
+    onDismissPromotion: handleDismissPromotion,
   };
 
   // ── Render gates ───────────────────────────────────────────────────────────
