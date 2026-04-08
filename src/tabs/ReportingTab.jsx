@@ -271,24 +271,10 @@ function IssuesList({ issues = [], onCreateIssue, onUpdateIssue,
 }
 
 // ── Draft Report ──────────────────────────────────────────────────────────────
-function DraftReport({ issues = [], auditData, onUpdateAuditData }) {
-  const stored = auditData?.report || {};
-  const [opinion, setOpinion]         = useState(stored.opinion || 'Needs Improvement');
-  const [execSummary, setExecSummary] = useState(stored.exec_summary || '');
-
-  // Sync local state only when report data values actually change.
-  // JSON.stringify prevents reference equality false-positives which would
-  // reset local state on every parent re-render.
-  const reportJson = JSON.stringify(auditData?.report);
-  React.useEffect(() => {
-    const r = auditData?.report;
-    if (!r) return;
-    if (r.opinion      !== undefined) setOpinion(r.opinion);
-    if (r.exec_summary !== undefined) setExecSummary(r.exec_summary || '');
-  }, [reportJson]); // eslint-disable-line react-hooks/exhaustive-deps
+function DraftReport({ issues = [], auditData, onUpdateAuditData,
+  opinion, onOpinionChange, execSummary, onExecSummaryChange }) {
 
   function handleChange(field, val) {
-    // Read current auditData.report at call time to avoid stale closure
     const current = auditData?.report || {};
     const updated = { ...current, [field]: val };
     onUpdateAuditData?.('report', updated);
@@ -317,7 +303,7 @@ function DraftReport({ issues = [], auditData, onUpdateAuditData }) {
             const s = OPINION_STYLE[o];
             const isSelected = opinion === o;
             return (
-              <button key={o} onClick={() => { setOpinion(o); handleChange('opinion', o); }} style={{
+              <button key={o} onClick={() => { onOpinionChange(o); handleChange('opinion', o); }} style={{
                 padding: '8px 16px', borderRadius: 'var(--radius-md)', fontSize: 13,
                 cursor: 'pointer', fontFamily: 'var(--font-sans)',
                 fontWeight: isSelected ? 600 : 400,
@@ -337,7 +323,7 @@ function DraftReport({ issues = [], auditData, onUpdateAuditData }) {
         label="Executive Summary"
         value={execSummary}
         multiline rows={5}
-        onChange={val => { setExecSummary(val); handleChange('exec_summary', val); }}
+        onChange={val => { onExecSummaryChange(val); handleChange('exec_summary', val); }}
       />
 
       <div style={{ marginTop: 16 }}>
@@ -365,10 +351,10 @@ function DraftReport({ issues = [], auditData, onUpdateAuditData }) {
 }
 
 // ── Reporting sign-off gates ───────────────────────────────────────────────────
-function computeReportingGates(issues, auditData) {
+function computeReportingGates(issues, opinion, execSummary) {
   const allFA = issues.length > 0 && issues.every(i => i.factual_accuracy_confirmed);
-  const hasOpinion = !!(auditData?.report?.opinion);
-  const hasExecSummary = (auditData?.report?.exec_summary || '').trim().length >= 20;
+  const hasOpinion = !!(opinion);
+  const hasExecSummary = (execSummary || '').trim().length >= 20;
   return [
     { label: 'All issues must have factual accuracy confirmed with management', passed: allFA },
     { label: 'Overall opinion must be selected',                                passed: hasOpinion },
@@ -389,10 +375,24 @@ export default function ReportingTab({
 }) {
   const [activeSection, setActiveSection] = useState('issues');
 
+  // Lifted from DraftReport so gates can read current local values immediately
+  const stored = auditData?.report || {};
+  const [opinion,     setOpinion]     = useState(stored.opinion      || 'Needs Improvement');
+  const [execSummary, setExecSummary] = useState(stored.exec_summary || '');
+
+  // Resync when auditData.report changes (e.g. on initial load)
+  const reportJson = JSON.stringify(auditData?.report);
+  useEffect(() => {
+    const r = auditData?.report;
+    if (!r) return;
+    if (r.opinion      !== undefined) setOpinion(r.opinion);
+    if (r.exec_summary !== undefined) setExecSummary(r.exec_summary || '');
+  }, [reportJson]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const issues  = auditData?.issues  || [];
   const signOff = signOffs.find(s => s.tab === 'Reporting') || null;
 
-  const reportingGates = computeReportingGates(issues, auditData);
+  const reportingGates = computeReportingGates(issues, opinion, execSummary);
   const canSignOff     = reportingGates.every(g => g.passed);
 
   // If a promotion just came in, switch to issues tab
@@ -440,6 +440,10 @@ export default function ReportingTab({
           issues={issues}
           auditData={auditData}
           onUpdateAuditData={onUpdateAuditData}
+          opinion={opinion}
+          onOpinionChange={setOpinion}
+          execSummary={execSummary}
+          onExecSummaryChange={setExecSummary}
         />
       </div>
 
