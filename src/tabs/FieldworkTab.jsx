@@ -1,36 +1,6 @@
 import { useState } from 'react';
-import { Card, SectionHeader, Badge, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-const OE_OPTIONS     = ['Not Tested', 'Effective', 'Partially Effective', 'Ineffective'];
-const STATUS_OPTIONS = ['Not Started', 'In Progress', 'Complete'];
-
-const STATUS_COLORS = {
-  'Not Started': { bg: 'var(--surface-1)',           border: 'var(--border)',              text: 'var(--text-muted)'    },
-  'In Progress': { bg: 'var(--status-amber-bg)',      border: 'var(--status-amber-border)', text: 'var(--status-amber)'  },
-  'Complete':    { bg: 'var(--status-green-bg)',      border: 'var(--status-green-border)', text: 'var(--status-green)'  },
-};
-
-const OE_COLORS = {
-  'Not Tested':         { bg: 'var(--surface-1)',       border: 'var(--border)',              text: 'var(--text-muted)'   },
-  'Effective':          { bg: 'var(--status-green-bg)', border: 'var(--status-green-border)', text: 'var(--status-green)' },
-  'Partially Effective':{ bg: 'var(--status-amber-bg)', border: 'var(--status-amber-border)', text: 'var(--status-amber)' },
-  'Ineffective':        { bg: 'var(--status-red-bg)',   border: 'var(--status-red-border)',   text: 'var(--status-red)'   },
-};
-
-function StatusSelect({ value, options, colors, onChange }) {
-  const c = colors[value] || colors[options[0]];
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      onClick={e => e.stopPropagation()}
-      style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-sm)', border: `1px solid ${c.border}`, background: c.bg, color: c.text, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}
-    >
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
+import { Card, SectionHeader, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
+import PlanningRACM from './PlanningRACM';
 
 // ── Query log (shared by control cards and General Queries) ───────────────────
 function QueryLog({ queries = [], users = [], currentUser, auditId, controlRef, phase,
@@ -208,181 +178,6 @@ function WorkingPapersList({ papers = [], onAdd, onRemove }) {
   );
 }
 
-// ── Control card ──────────────────────────────────────────────────────────────
-function ControlCard({ risk, ctrl, queries, users, currentUser, auditId,
-  onUpdateControl, onCreateQuery, onUpdateQuery, onPromoteToIssue }) {
-
-  const [expanded, setExpanded] = useState(false);
-
-  const oe     = ctrl.operating_effectiveness || 'Not Tested';
-  const status = ctrl.testing_status_fw       || 'Not Started';
-
-  const openQueries = queries.filter(q => q.control_ref === ctrl.control_ref && q.status === 'Open').length;
-
-  function handleWPAdd(wp) {
-    onUpdateControl(risk.id, ctrl.id, 'working_papers', [...(ctrl.working_papers || []), wp]);
-  }
-  function handleWPRemove(wpId) {
-    onUpdateControl(risk.id, ctrl.id, 'working_papers', (ctrl.working_papers || []).filter(w => w.id !== wpId));
-  }
-
-  return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 8 }}>
-
-      {/* Header */}
-      <div onClick={() => setExpanded(s => !s)}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', background: 'var(--surface-0)' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ni-teal)' }}>{ctrl.control_ref}</span>
-            <Badge label={ctrl.control_type} size="sm" />
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ctrl.frequency}</span>
-          </div>
-          <p style={{ fontSize: 13, lineHeight: 1.4, margin: 0 }}>{ctrl.control_description}</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>n={ctrl.sample_size}</span>
-          {openQueries > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 10, background: 'var(--status-amber)', color: '#fff' }}>
-              {openQueries} open
-            </span>
-          )}
-          <div onClick={e => e.stopPropagation()}>
-            <StatusSelect value={oe} options={OE_OPTIONS} colors={OE_COLORS}
-              onChange={val => onUpdateControl(risk.id, ctrl.id, 'operating_effectiveness', val)} />
-          </div>
-          <div onClick={e => e.stopPropagation()}>
-            <StatusSelect value={status} options={STATUS_OPTIONS} colors={STATUS_COLORS}
-              onChange={val => onUpdateControl(risk.id, ctrl.id, 'testing_status_fw', val)} />
-          </div>
-          <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>{expanded ? '-' : '+'}</span>
-        </div>
-      </div>
-
-      {/* Body */}
-      {expanded && (
-        <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-          {/* Testing Strategy (read-only reference from RACM) */}
-          {(ctrl.test_objective || ctrl.test_approach) && (
-            <div style={{ background: 'var(--ni-teal-dim)', border: '1px solid rgba(0,167,157,0.2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--ni-teal)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Testing Strategy (from RACM)</p>
-              {ctrl.test_objective && (
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Objective: </span>
-                  <span style={{ fontSize: 12 }}>{ctrl.test_objective}</span>
-                </div>
-              )}
-              {ctrl.test_approach && (
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Approach: </span>
-                  <span style={{ fontSize: 12 }}>{ctrl.test_approach}</span>
-                </div>
-              )}
-              <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sample size: </span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ni-teal)' }}>n={ctrl.sample_size}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Work Done */}
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Work Done</label>
-            <textarea
-              value={ctrl.work_done || ''}
-              onChange={e => onUpdateControl(risk.id, ctrl.id, 'work_done', e.target.value)}
-              rows={3}
-              placeholder="Document what testing was performed, evidence obtained, observations..."
-              style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: 13, fontFamily: 'var(--font-sans)', background: 'var(--surface-0)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          {/* Working Papers */}
-          <WorkingPapersList papers={ctrl.working_papers || []} onAdd={handleWPAdd} onRemove={handleWPRemove} />
-
-          {/* Queries for this control */}
-          <QueryLog
-            queries={queries} users={users} currentUser={currentUser}
-            auditId={auditId} controlRef={ctrl.control_ref} phase="Fieldwork"
-            onCreateQuery={onCreateQuery} onUpdateQuery={onUpdateQuery} onPromoteToIssue={onPromoteToIssue}
-          />
-
-          {/* Ineffective alert */}
-          {(oe === 'Ineffective' || oe === 'Partially Effective') && (
-            <div style={{ padding: '8px 12px', background: 'var(--status-amber-bg)', border: '1px solid var(--status-amber-border)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--status-amber)' }}>
-              O/E = {oe} - raise a query above or promote to an issue via the query log.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Audit Testing section ─────────────────────────────────────────────────────
-function AuditTesting({ racmRisks = [], queries = [], users, currentUser, auditId,
-  onUpdateRacm, onCreateQuery, onUpdateQuery, onPromoteToIssue }) {
-
-  if (racmRisks.length === 0) {
-    return (
-      <Card style={{ padding: 20 }}>
-        <EmptyState icon="o" title="No RACM controls yet"
-          description="Add risks and controls in Planning - RACM first. They will appear here for testing." />
-      </Card>
-    );
-  }
-
-  function updateControl(riskId, ctrlId, field, value) {
-    onUpdateRacm(racmRisks.map(r => r.id !== riskId ? r : {
-      ...r,
-      controls: r.controls.map(c => c.id !== ctrlId ? c : { ...c, [field]: value }),
-    }));
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {racmRisks.map(risk => {
-        const controls = risk.controls || [];
-        const complete = controls.filter(c => (c.testing_status_fw || 'Not Started') === 'Complete').length;
-        return (
-          <Card key={risk.id} style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', background: 'var(--surface-1)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 4, height: 32, borderRadius: 2, background: 'var(--ni-teal)', flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{risk.risk_ref}</span>
-                  <Badge label={risk.category} size="sm" />
-                </div>
-                <p style={{ fontSize: 13, fontWeight: 500, margin: 0, lineHeight: 1.4 }}>{risk.risk_description}</p>
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, flexShrink: 0, color: complete === controls.length && controls.length > 0 ? 'var(--status-green)' : 'var(--text-muted)' }}>
-                {complete}/{controls.length} complete
-              </span>
-            </div>
-            <div style={{ padding: '12px 16px' }}>
-              {controls.length === 0 ? (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No controls defined. Add controls in Planning - RACM.</p>
-              ) : (
-                controls.map(ctrl => (
-                  <ControlCard key={ctrl.id}
-                    risk={risk} ctrl={ctrl} queries={queries}
-                    users={users} currentUser={currentUser} auditId={auditId}
-                    onUpdateControl={updateControl}
-                    onCreateQuery={onCreateQuery} onUpdateQuery={onUpdateQuery}
-                    onPromoteToIssue={onPromoteToIssue}
-                  />
-                ))
-              )}
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Fieldwork sign-off gates ───────────────────────────────────────────────────
 function computeFieldworkGates(racmRisks, queries) {
   const allControls = (racmRisks || []).flatMap(r => r.controls || []);
   const hasControls = allControls.length > 0;
@@ -442,12 +237,11 @@ export default function FieldworkTab({
       </div>
 
       {activeSection === 'testing' && (
-        <AuditTesting
-          racmRisks={racmRisks} queries={queries}
-          users={users} currentUser={currentUser} auditId={audit?.id}
-          onUpdateRacm={updated => onUpdateAuditData('racmRisks', updated)}
-          onCreateQuery={onCreateQuery} onUpdateQuery={onUpdateQuery}
-          onPromoteToIssue={onPromoteToIssue}
+        <PlanningRACM
+          auditData={auditData}
+          onUpdateAuditData={onUpdateAuditData}
+          mode="fieldwork"
+          onTabChange={onTabChange}
         />
       )}
 
