@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, SectionHeader, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
+import { Card, SectionHeader, Badge, Button, EmptyState, SignOffBar, Modal, Field } from '../components/UI';
 import PlanningRACM from './PlanningRACM';
 
 // ── Query log (shared by control cards and General Queries) ───────────────────
